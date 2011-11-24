@@ -22,6 +22,14 @@ require 'acpc_poker_types'
 class MatchState
    include AcpcPokerTypesDefs
    
+   # @todo
+   attr_reader :pot
+   attr_reader :players
+   attr_reader :game_definition
+   attr_reader :player_names
+   attr_reader :number_of_hands
+   attr_reader :match_state_string
+   
    # @param [String] game_definition_file_name The name of the file containing the definition of the game, of which, this match is an instance.
    # @param [MatchstateString] match_state_string The initial state of this match.
    # @param [Array] player_names The names of the players in this match.
