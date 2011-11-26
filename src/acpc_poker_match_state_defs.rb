@@ -1,6 +1,6 @@
 
 # Assortment of constant definitions and methods for generating default values.
-module NotTypeDefs
+module AcpcPokerMatchStateDefs
 
    # @return [Integer] The user's index in the array of Player.
    USERS_INDEX = 0;
