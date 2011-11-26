@@ -1,19 +1,6 @@
 
-# @todo Only want certain types and modules
-## Local modules
-# require File.expand_path('../../application_defs', __FILE__)
-## Local mixins
-#require File.expand_path('../../mixins/easy_exceptions', __FILE__)
-## Local classes
-## Domain types
-#require File.expand_path('../../game/domain_types/board_cards', __FILE__)
-#require File.expand_path('../../game/domain_types/card', __FILE__)
-#require File.expand_path('../../game/domain_types/chip_stack', __FILE__)
-#require File.expand_path('../../game/domain_types/game_definition', __FILE__)
-#require File.expand_path('../../game/domain_types/hand', __FILE__)
-#require File.expand_path('../../game/domain_types/matchstate_string', __FILE__)
-#require File.expand_path('../../game/domain_types/player', __FILE__)
-#require File.expand_path('../../game/domain_types/side_pot', __FILE__)
+# Local modules
+require File.expand_path('../acpc_poker_match_state_defs', __FILE__)
 
 # Gems
 require 'acpc_poker_types'
@@ -21,6 +8,7 @@ require 'acpc_poker_types'
 # The state of a poker match.
 class MatchState
    include AcpcPokerTypesDefs
+   include AcpcPokerMatchStateDefs
    
    # @todo
    attr_reader :pot
