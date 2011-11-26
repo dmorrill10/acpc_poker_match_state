@@ -56,101 +56,7 @@ class MatchState
    def users_turn_to_act?      
       users_turn_to_act = position_relative_to_dealer_next_to_act == users_position_relative_to_dealer
       users_turn_to_act &= !hand_ended?
-   end   
-   
-   private
-   
-   def create_players
-      # The array of players is built so that it's centered on the user.
-      # The user is at index USERS_INDEX = 0, the player to the user's immediate left is
-      # at index 1, etc.
-      players = []
-      number_of_players.times do |player_index|
-         name = @player_names[player_index]
-         seat = player_index         
-         my_position_relative_to_dealer = position_relative_to_dealer seat
-         position_relative_to_user = users_position_relative_to_user - player_index
-         stack = ChipStack.new @game_definition.list_of_player_stacks[player_index]
-         
-         players << Player.new(name, seat, my_position_relative_to_dealer, position_relative_to_user, stack)
-      end
-      
-      players
    end
-      
-   # (see PlayerManager#start_new_hand!)
-   def start_new_hand!      
-      reset_players!
-   end
-   
-   def reset_players!
-      @players.each_index do |i|
-         @players[i].is_all_in = false
-         @players[i].has_folded = false
-         @players[i].chip_stack = ChipStack.new @game_definition.list_of_player_stacks[i] # @todo if @is_doyles_game
-         @players[i].position_relative_to_dealer = position_relative_to_dealer @players[i].seat
-      end
-      
-      @pot = create_new_pot!
-      assign_users_cards!
-   end
-   
-   def create_new_pot!
-      pot = SidePot.new player_who_submitted_big_blind, big_blind
-      pot.contribute! player_who_submitted_small_blind, small_blind
-      pot
-   end
-
-   def first_state_of_the_first_round?
-      0 == round && 0 == number_of_actions_in_current_round
-   end
-   
-   def assign_users_cards!
-      user = user_player
-      user.hole_cards = users_hole_cards
-   end
-   
-   def assign_hole_cards_to_opponents!
-      list_of_opponent_players.each do |opponent|
-         opponent.hole_cards = @match_state_string.list_of_hole_card_hands[opponent.position_relative_to_dealer] unless opponent.has_folded
-      end
-   end
-   
-   def evaluate_end_of_hand!
-      assign_hole_cards_to_opponents!
-      @pot.distribute_chips! board_cards
-   end
-   
-   def update_state_of_players!
-      last_player_to_act = @players[player_who_acted_last_index]
-      
-      puts "   update_state_of_players!: last_player_to_act: #{last_player_to_act}, action: #{last_action}, pot: #{@pot.inspect}"      
-      
-      case last_action_type
-         when ACTION_TYPES[:call]
-            @pot.take_call! last_player_to_act
-         when ACTION_TYPES[:fold]
-            last_player_to_act.has_folded = true
-         when ACTION_TYPES[:raise]
-            amount_to_raise_to = raise_amount || raise_size_in_this_round +
-                                                @pot.players_involved_and_their_amounts_contributed[last_player_to_act] +
-                                                @pot.amount_to_call(last_player_to_act)
-            @pot.take_raise! last_player_to_act, amount_to_raise_to
-      end
-   end
-   
-   def remember_values_from_last_round!
-      if @match_state_string
-         # @todo Not sure if I need to keep track of this
-         @last_round = round 
-         @position_relative_to_dealer_acted_last = position_relative_to_dealer_next_to_act
-         @last_match_state = @match_state_string
-      end
-   end
-   
-   def next_match_state
-      @proxy_bot.receive_match_state_string
-   end 
    
    # Convienence methods for retrieving particular players
    
@@ -415,4 +321,98 @@ class MatchState
    def list_of_players_who_have_folded
       @players.select { |player| player.has_folded }
    end
+   
+   private
+   
+   def create_players
+      # The array of players is built so that it's centered on the user.
+      # The user is at index USERS_INDEX = 0, the player to the user's immediate left is
+      # at index 1, etc.
+      players = []
+      number_of_players.times do |player_index|
+         name = @player_names[player_index]
+         seat = player_index         
+         my_position_relative_to_dealer = position_relative_to_dealer seat
+         position_relative_to_user = users_position_relative_to_user - player_index
+         stack = ChipStack.new @game_definition.list_of_player_stacks[player_index]
+         
+         players << Player.new(name, seat, my_position_relative_to_dealer, position_relative_to_user, stack)
+      end
+      
+      players
+   end
+      
+   # (see PlayerManager#start_new_hand!)
+   def start_new_hand!      
+      reset_players!
+   end
+   
+   def reset_players!
+      @players.each_index do |i|
+         @players[i].is_all_in = false
+         @players[i].has_folded = false
+         @players[i].chip_stack = ChipStack.new @game_definition.list_of_player_stacks[i] # @todo if @is_doyles_game
+         @players[i].position_relative_to_dealer = position_relative_to_dealer @players[i].seat
+      end
+      
+      @pot = create_new_pot!
+      assign_users_cards!
+   end
+   
+   def create_new_pot!
+      pot = SidePot.new player_who_submitted_big_blind, big_blind
+      pot.contribute! player_who_submitted_small_blind, small_blind
+      pot
+   end
+
+   def first_state_of_the_first_round?
+      0 == round && 0 == number_of_actions_in_current_round
+   end
+   
+   def assign_users_cards!
+      user = user_player
+      user.hole_cards = users_hole_cards
+   end
+   
+   def assign_hole_cards_to_opponents!
+      list_of_opponent_players.each do |opponent|
+         opponent.hole_cards = @match_state_string.list_of_hole_card_hands[opponent.position_relative_to_dealer] unless opponent.has_folded
+      end
+   end
+   
+   def evaluate_end_of_hand!
+      assign_hole_cards_to_opponents!
+      @pot.distribute_chips! board_cards
+   end
+   
+   def update_state_of_players!
+      last_player_to_act = @players[player_who_acted_last_index]
+      
+      puts "   update_state_of_players!: last_player_to_act: #{last_player_to_act}, action: #{last_action}, pot: #{@pot.inspect}"      
+      
+      case last_action_type
+         when ACTION_TYPES[:call]
+            @pot.take_call! last_player_to_act
+         when ACTION_TYPES[:fold]
+            last_player_to_act.has_folded = true
+         when ACTION_TYPES[:raise]
+            amount_to_raise_to = raise_amount || raise_size_in_this_round +
+                                                @pot.players_involved_and_their_amounts_contributed[last_player_to_act] +
+                                                @pot.amount_to_call(last_player_to_act)
+            @pot.take_raise! last_player_to_act, amount_to_raise_to
+      end
+   end
+   
+   def remember_values_from_last_round!
+      if @match_state_string
+         # @todo Not sure if I need to keep track of this
+         @last_round = round 
+         @position_relative_to_dealer_acted_last = position_relative_to_dealer_next_to_act
+         @last_match_state = @match_state_string
+      end
+   end
+   
+   def next_match_state
+      @proxy_bot.receive_match_state_string
+   end 
 end
