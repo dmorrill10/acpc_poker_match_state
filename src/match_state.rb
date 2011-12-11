@@ -192,11 +192,6 @@ class MatchState
       @match_state_string.last_action
    end
    
-   # @see MatchstateString#raise_amount
-   def raise_amount
-      @match_state_string.raise_amount
-   end
-   
    # @see MatchstateString#round
    def round
       @match_state_string.round
@@ -389,7 +384,7 @@ class MatchState
          when 'f'
             last_player_to_act.has_folded = true
          when 'r'
-            amount_to_raise_to = raise_amount || raise_size_in_this_round +
+            amount_to_raise_to = last_action.modifier || raise_size_in_this_round +
                                                 @pot.players_involved_and_their_amounts_contributed[last_player_to_act] +
                                                 @pot.amount_to_call(last_player_to_act)
             @pot.take_raise! last_player_to_act, amount_to_raise_to
