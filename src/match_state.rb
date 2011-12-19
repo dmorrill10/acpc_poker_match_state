@@ -34,6 +34,7 @@ class MatchState
       @players = create_players
       assign_users_cards!
       @pot = create_new_pot!
+      @player_acting_sequence = [[]]
    end
    
    # @param [MatchstateString] match_state_string The next match state.
@@ -46,8 +47,9 @@ class MatchState
       else
          update_state_of_players!
          evaluate_end_of_hand! if hand_ended?
+         @player_acting_sequence << [] if @match_state_string.round > @last_round
+         @player_acting_sequence[@match_state_string.round] << player_who_acted_last.seat
       end
-      @player_acting_sequence += player_who_acted_last.seat
       
       self
    end
@@ -245,7 +247,7 @@ class MatchState
       string = ''
       (@match_state_string.round + 1).times do |i|
          string += @player_acting_sequence[i].join('')
-         string += '/' unless i == round
+         string += '/' unless i == @match_state_string.round
       end
       string
    end
@@ -282,7 +284,7 @@ class MatchState
    def start_new_hand!
       reset_players!
       @pot = create_new_pot!
-      @player_acting_sequence = []
+      @player_acting_sequence = [[]]
    end
    
    def reset_players!      
