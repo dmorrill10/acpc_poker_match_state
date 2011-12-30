@@ -239,10 +239,10 @@ class MatchState
    
    # @return [Set] The set of legal actions for the currently acting player.
    def legal_actions
-      list_of_action_symbols = if 0 == @pot.amount_to_call(player_whose_turn_is_next)
-         [:check, :bet]
-      else
+      list_of_action_symbols = if acting_player_sees_wager?
          [:call, :fold, :raise]
+      else
+         [:check, :bet]
       end
       
       list_of_action_symbols.inject(Set.new) do |set, action_symbol|
@@ -262,6 +262,10 @@ class MatchState
          string += '/' unless i == @match_state_string.round
       end
       string
+   end
+   
+   def acting_player_sees_wager?
+      0 == @pot.amount_to_call(player_whose_turn_is_next)
    end
    
    private
@@ -377,5 +381,5 @@ class MatchState
    
    def next_match_state
       @proxy_bot.receive_match_state_string
-   end 
+   end
 end
