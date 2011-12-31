@@ -265,7 +265,7 @@ class MatchState
    end
    
    def acting_player_sees_wager?
-      0 == @pot.amount_to_call(player_whose_turn_is_next)
+      0 != @pot.amount_to_call(player_whose_turn_is_next)
    end
    
    private
