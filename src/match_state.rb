@@ -21,6 +21,7 @@ class MatchState
    attr_reader :number_of_hands
    attr_reader :match_state_string
    attr_reader :player_acting_sequence
+   attr_reader :betting_sequence
    
    # @param [GameDefinition] game_definition The definition of the game being played.
    # @param [MatchstateString] match_state_string The initial state of this match.
@@ -38,6 +39,7 @@ class MatchState
       assign_users_cards!
       @pot = create_new_pot!
       @player_acting_sequence = [[]]
+      @betting_sequence = [[]]
    end
    
    # @param [MatchstateString] match_state_string The next match state.
@@ -50,8 +52,12 @@ class MatchState
       else
          update_state_of_players!
          evaluate_end_of_hand! if hand_ended?
-         @player_acting_sequence << [] if @match_state_string.round > @last_round
+         if @match_state_string.round > @last_round
+            @player_acting_sequence << []
+            @betting_sequence << []
+         end
          @player_acting_sequence[@match_state_string.round] << player_who_acted_last.seat
+         @betting_sequence[@match_state_string.round] << @match_state_string.last_action.to_acpc
       end
       
       self
@@ -264,8 +270,12 @@ class MatchState
       string
    end
    
+   def betting_sequence_string
+      @match_state_string.betting_sequence_string(@betting_sequence)
+   end
+   
    def acting_player_sees_wager?
-      0 != @pot.amount_to_call(player_whose_turn_is_next)
+      @pot.amount_to_call(player_whose_turn_is_next) > 0
    end
    
    private
@@ -356,19 +366,22 @@ class MatchState
       else
          last_player_to_act.actions_taken_in_current_round << @match_state_string.last_action
       end
-      
-      case @match_state_string.last_action.to_acpc
-         when 'c'
-            @pot.take_call! last_player_to_act
-         when 'f'
-            last_player_to_act.has_folded = true
-         when 'r' or 'b'
-            amount_to_raise_to = if @match_state_string.last_action.modifier
-               @match_state_string.last_action.modifier
-            else
-               raise_size_in_this_round + @pot.players_involved_and_their_amounts_contributed[last_player_to_act] + @pot.amount_to_call(last_player_to_act)
-            end
-            @pot.take_raise! last_player_to_act, amount_to_raise_to
+
+      # @todo This could and probably should be a case statement but I can't use them properly yet with multiple conditions      
+      acpc_action = @match_state_string.last_action.to_acpc
+      if 'c' == acpc_action || 'k' == acpc_action
+         @pot.take_call! last_player_to_act
+      elsif 'f' == acpc_action
+         last_player_to_act.has_folded = true
+      elsif 'r' == acpc_action || 'b' == acpc_action
+         amount_to_raise_to = if @match_state_string.last_action.modifier
+            @match_state_string.last_action.modifier
+         else
+            raise_size_in_this_round + @pot.players_involved_and_their_amounts_contributed[last_player_to_act] + @pot.amount_to_call(last_player_to_act)
+         end
+         @pot.take_raise! last_player_to_act, amount_to_raise_to
+      else
+         raise PokerAction::IllegalPokerAction, acpc_action
       end
    end
    
