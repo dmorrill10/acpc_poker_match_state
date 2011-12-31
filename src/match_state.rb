@@ -367,7 +367,7 @@ class MatchState
                @match_state_string.last_action.modifier
             else
                raise_size_in_this_round + @pot.players_involved_and_their_amounts_contributed[last_player_to_act] + @pot.amount_to_call(last_player_to_act)
-
+            end
             @pot.take_raise! last_player_to_act, amount_to_raise_to
       end
    end
