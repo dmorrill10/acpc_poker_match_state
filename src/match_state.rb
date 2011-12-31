@@ -57,7 +57,7 @@ class MatchState
             @betting_sequence << []
          end
          @player_acting_sequence[@match_state_string.round] << player_who_acted_last.seat
-         @betting_sequence[@match_state_string.round] << @match_state_string.last_action.to_acpc
+         @betting_sequence[@match_state_string.round] << @match_state_string.last_action
       end
       
       self
