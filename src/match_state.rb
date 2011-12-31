@@ -362,7 +362,7 @@ class MatchState
             @pot.take_call! last_player_to_act
          when 'f'
             last_player_to_act.has_folded = true
-         when 'r'
+         when 'r' or 'b'
             amount_to_raise_to = if @match_state_string.last_action.modifier
                @match_state_string.last_action.modifier
             else
