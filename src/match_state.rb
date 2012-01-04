@@ -52,8 +52,8 @@ class MatchState
       else
          update_state_of_players!
          evaluate_end_of_hand! if hand_ended?
-         @player_acting_sequence[@match_state_string.round] << player_who_acted_last.seat
-         @betting_sequence[@match_state_string.round] << @match_state_string.last_action
+         @player_acting_sequence[-1] << player_who_acted_last.seat
+         @betting_sequence[-1] << @match_state_string.last_action
          if @match_state_string.round > @last_round
             @player_acting_sequence << []
             @betting_sequence << []
