@@ -37,9 +37,7 @@ class MatchState
       
       @players = create_players
       assign_users_cards!
-      @pot = create_new_pot!
-      @player_acting_sequence = [[]]
-      @betting_sequence = [[]]
+      set_initial_internal_state!
    end
    
    # @param [MatchstateString] match_state_string The next match state.
@@ -58,6 +56,8 @@ class MatchState
             @player_acting_sequence << []
             @betting_sequence << []
          end
+         
+         puts "MatchState: update!: @betting_sequence: #{@betting_sequence}"
       end
       
       self
@@ -309,8 +309,13 @@ class MatchState
    # (see PlayerManager#start_new_hand!)
    def start_new_hand!
       reset_players!
+      set_initial_internal_state!
+   end
+   
+   def set_initial_internal_state!
       @pot = create_new_pot!
       @player_acting_sequence = [[]]
+      @betting_sequence = [[]]
    end
    
    def reset_players!      
