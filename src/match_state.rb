@@ -22,6 +22,7 @@ class MatchState
    attr_reader :match_state_string
    attr_reader :player_acting_sequence
    attr_reader :betting_sequence
+   attr_reader :pot_values_at_start_of_round
    
    # @param [GameDefinition] game_definition The definition of the game being played.
    # @param [MatchstateString] match_state_string The initial state of this match.
@@ -52,12 +53,12 @@ class MatchState
          evaluate_end_of_hand! if hand_ended?
          @player_acting_sequence[-1] << player_who_acted_last.seat
          @betting_sequence[-1] << @match_state_string.last_action
-         if @match_state_string.round > @last_round
+         if in_new_round?
             @player_acting_sequence << []
             @betting_sequence << []
          end
-         
-         puts "MatchState: update!: @betting_sequence: #{@betting_sequence}"
+         # @todo When pot actually becomes an array of side pots this will become: @pot_values_at_start_of_round = @pot.map { |side_pot| side_pot.to_i }
+         @pot_values_at_start_of_round = @pot.to_i if in_new_round? || hand_ended?
       end
       
       self
@@ -182,7 +183,7 @@ class MatchState
    end
    
    # @return [Boolean] +true+ if it is the user's turn to act, +false+ otherwise.
-   def users_turn_to_act?      
+   def users_turn_to_act?
       users_turn_to_act = position_relative_to_dealer_next_to_act == @match_state_string.position_relative_to_dealer
       users_turn_to_act &= !hand_ended?
    end
@@ -223,6 +224,11 @@ class MatchState
    # @return [Boolean] +true+ if any opponents cards are visible, +false+ otherwise.
    def opponents_cards_visible?
       are_visible = (@match_state_string.list_of_opponents_hole_cards.length > 0 && !@match_state_string.list_of_opponents_hole_cards[0].empty?)
+   end
+   
+   # @return [Boolean] +true+ if the current round is a later round than the round in which the last action was taken, +false+ otherwise.
+   def in_new_round?
+      @match_state_string.round > @last_round
    end
    
    # Player chip information
@@ -316,6 +322,8 @@ class MatchState
       @pot = create_new_pot!
       @player_acting_sequence = [[]]
       @betting_sequence = [[]]
+      # @todo When pot actually becomes an array of side pots this will become: @pot_values_at_start_of_round = [0]
+      @pot_values_at_start_of_round = 0
    end
    
    def reset_players!      
@@ -372,7 +380,7 @@ class MatchState
          last_player_to_act.actions_taken_in_current_round << @match_state_string.last_action
       end
 
-      # @todo This could and probably should be a case statement but I can't use them properly yet with multiple conditions      
+      # @todo This could and probably should be a case statement but I can't use them properly yet with multiple conditions
       acpc_action = @match_state_string.last_action.to_acpc
       if 'c' == acpc_action || 'k' == acpc_action
          @pot.take_call! last_player_to_act
