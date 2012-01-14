@@ -96,9 +96,14 @@ class MatchState
       @players[USERS_INDEX]
    end
    
-   # @return [Array] The players in the game still currently active.
+   # @return [Array<Player>] The players who are active.
    def active_players
       @players.select { |player| player.is_active? }
+   end
+   
+   #@return [Array<Player>] The players who have not folded.
+   def non_folded_players
+      @players.select { |player| !player.folded? }
    end
    
    def list_of_opponent_players
@@ -146,7 +151,7 @@ class MatchState
    # @return [Integer] The position relative to the dealer that is next to act.
    # @todo I think this will not work outside of two player.
    def position_relative_to_dealer_next_to_act      
-      (first_player_position_in_current_round - 1 + @match_state_string.number_of_actions_in_current_round) % number_of_active_players
+      (first_player_position_in_current_round - 1 + @match_state_string.number_of_actions_in_current_round) % active_players.length
    end
    
    # @return [Integer] The user's position relative to the user.
@@ -193,11 +198,7 @@ class MatchState
       # @todo make sure +@match_state_string.hand_number+ is not greater than @number_of_hands
       @match_state_string.hand_number == @number_of_hands - 1
    end
-   
-   def less_than_two_active_players?
-      active_players.length < 2
-   end
-   
+
    # @todo
    def is_reverse_blinds?
       2 == @game_definition.number_of_players
@@ -210,11 +211,11 @@ class MatchState
    
    # @return [Boolean] +true+ if the hand has ended, +false+ otherwise.
    def hand_ended?
-      less_than_two_active_players? || reached_showdown?
+      less_than_two_non_folded_players? || reached_showdown?
    end
    
-   def less_than_two_active_players?      
-      active_players.length < 2
+   def less_than_two_non_folded_players?   
+      non_folded_players.length < 2
    end
    
    def reached_showdown?
@@ -244,10 +245,6 @@ class MatchState
    end
    
    # Convenience methods
-   
-   def number_of_active_players
-      active_players.length
-   end
    
    # @return [Set] The set of legal actions for the currently acting player.
    def legal_actions
