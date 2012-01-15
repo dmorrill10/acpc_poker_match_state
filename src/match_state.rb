@@ -378,7 +378,7 @@ class MatchState
       end
 
       # @todo This could and probably should be a case statement but I can't use them properly yet with multiple conditions
-      acpc_action = @match_state_string.last_action.to_acpc
+      acpc_action = @match_state_string.last_action.to_acpc_character
       if 'c' == acpc_action || 'k' == acpc_action
          @pot.take_call! last_player_to_act
       elsif 'f' == acpc_action
