@@ -23,6 +23,7 @@ class MatchState
    attr_reader :player_acting_sequence
    attr_reader :betting_sequence
    attr_reader :pot_values_at_start_of_round
+   attr_reader :minimum_wager
    
    # @param [GameDefinition] game_definition The definition of the game being played.
    # @param [MatchstateString] match_state_string The initial state of this match.
@@ -56,6 +57,7 @@ class MatchState
          if in_new_round?
             @player_acting_sequence << []
             @betting_sequence << []
+            @minimum_wager = @game_definition.minimum_wager_in_each_round[@match_state_string.round]
          end
          # @todo When pot actually becomes an array of side pots this will become: @pot_values_at_start_of_round = @pot.map { |side_pot| side_pot.to_i }
          @pot_values_at_start_of_round = @pot.to_i if in_new_round? || hand_ended?
@@ -261,7 +263,7 @@ class MatchState
    
    # return [Integer] The minimum raise amount in the current round.
    def raise_size_in_this_round
-      @game_definition.raise_size_in_each_round[@match_state_string.round]
+      @game_definition.minimum_wager_in_each_round[@match_state_string.round]
    end
    
    def player_acting_sequence_string
@@ -316,11 +318,12 @@ class MatchState
    end
    
    def set_initial_internal_state!
-      @pot = create_new_pot!
+      @pot = create_new_pot
       @player_acting_sequence = [[]]
       @betting_sequence = [[]]
       # @todo When pot actually becomes an array of side pots this will become: @pot_values_at_start_of_round = [0]
       @pot_values_at_start_of_round = 0
+      @minimum_wager = @game_definition.minimum_wager_in_each_round.first
    end
    
    def reset_players!      
@@ -342,7 +345,7 @@ class MatchState
       end
    end
    
-   def create_new_pot!
+   def create_new_pot
       pot = SidePot.new player_who_submitted_big_blind, @game_definition.big_blind
       pot.contribute! player_who_submitted_small_blind, @game_definition.small_blind
       pot
@@ -384,12 +387,14 @@ class MatchState
       elsif 'f' == acpc_action
          last_player_to_act.has_folded = true
       elsif 'r' == acpc_action || 'b' == acpc_action
+         amount_put_in_pot_after_calling = @pot.players_involved_and_their_amounts_contributed[last_player_to_act] + @pot.amount_to_call(last_player_to_act)
          amount_to_raise_to = if @match_state_string.last_action.modifier
             @match_state_string.last_action.modifier
          else
-            raise_size_in_this_round + @pot.players_involved_and_their_amounts_contributed[last_player_to_act] + @pot.amount_to_call(last_player_to_act)
+            @minimum_wager + amount_put_in_pot_after_calling
          end
          @pot.take_raise! last_player_to_act, amount_to_raise_to
+         @minimum_wager = amount_to_raise_to - amount_put_in_pot_after_calling
       else
          raise PokerAction::IllegalPokerAction, acpc_action
       end
