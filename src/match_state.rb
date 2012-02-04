@@ -182,6 +182,13 @@ class MatchState
       @match_state_string.position_relative_to_dealer
    end
    
+   def amounts_to_call
+      @players.inject({}) do |hash, player|
+         hash[player.name] = @pot.amount_to_call(player)
+         hash
+      end
+   end
+   
    # Convenience game logic methods
    
    # @return [Boolean] +true+ if the match has ended, +false+ otherwise.
