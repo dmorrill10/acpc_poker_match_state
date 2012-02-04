@@ -184,7 +184,7 @@ class MatchState
    
    def amounts_to_call
       @players.inject({}) do |hash, player|
-         hash[player.name] = @pot.amount_to_call(player)
+         hash[player.name] = @pot.amount_to_call(player).to_i
          hash
       end
    end
