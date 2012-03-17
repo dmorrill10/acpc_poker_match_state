@@ -21,12 +21,7 @@ task :tag => :build do
    tag_gem_version AcpcPokerMatchState::VERSION
 end
 
-desc 'Integrate this gem into a given app'
-task :integrate, :rel_app_path do |t, args|
-   #Rake::Task[:tag].invoke
-   Rake::Task[:build].invoke
-   gem_name = "acpc_poker_match_state-#{AcpcPokerMatchState::VERSION}.gem"
-   integrate_into_app args[:rel_app_path], gem_name
+task :install => :build do
 end
 
 #desc "release gem to gemserver"

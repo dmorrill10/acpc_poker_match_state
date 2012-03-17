@@ -11,7 +11,7 @@ Gem::Specification.new do |s|
   s.summary     = %q{ACPC Poker Match State}
   s.description = %q{Match state data manager.}
   
-  s.add_development_dependency 'acpc_poker_types'
+  s.add_dependency 'acpc_poker_types'
   
   s.add_development_dependency 'rspec'
   s.add_development_dependency 'mocha'

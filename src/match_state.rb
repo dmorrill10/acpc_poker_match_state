@@ -13,7 +13,7 @@ class MatchState
    include AcpcPokerTypesDefs
    include AcpcPokerMatchStateDefs
    
-   # @todo
+   # @todo Comment these
    attr_reader :pot
    attr_reader :players
    attr_reader :game_definition
