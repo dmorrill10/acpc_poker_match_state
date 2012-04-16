@@ -55,6 +55,7 @@ class MatchState
          @player_acting_sequence[-1] << player_who_acted_last.seat
          @betting_sequence[-1] << @match_state_string.last_action
          if in_new_round?
+            @pot.round = @match_state_string.round
             @player_acting_sequence << []
             @betting_sequence << []
             @minimum_wager = @game_definition.minimum_wager_in_each_round[@match_state_string.round]
@@ -387,14 +388,13 @@ class MatchState
          last_player_to_act.actions_taken_in_current_round << @match_state_string.last_action
       end
 
-      # @todo This could and probably should be a case statement but I can't use them properly yet with multiple conditions
       acpc_action = @match_state_string.last_action.to_acpc_character
       if 'c' == acpc_action || 'k' == acpc_action
          @pot.take_call! last_player_to_act
       elsif 'f' == acpc_action
          last_player_to_act.has_folded = true
       elsif 'r' == acpc_action || 'b' == acpc_action
-         amount_put_in_pot_after_calling = @pot.players_involved_and_their_amounts_contributed[last_player_to_act] + @pot.amount_to_call(last_player_to_act)
+         amount_put_in_pot_after_calling = @pot.players_involved_and_their_amounts_contributed[last_player_to_act].sum + @pot.amount_to_call(last_player_to_act)
          amount_to_raise_to = if @match_state_string.last_action.modifier
             @match_state_string.last_action.modifier
          else
