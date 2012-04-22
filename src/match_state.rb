@@ -260,6 +260,8 @@ class MatchState
    def legal_actions
       list_of_action_symbols = if acting_player_sees_wager?
          [:call, :fold, :raise]
+      elsif acting_player_contributed_to_the_pot_this_round?
+         [:check, :raise]
       else
          [:check, :bet]
       end
@@ -361,6 +363,17 @@ class MatchState
 
    def first_state_of_the_first_round?
       0 == @match_state_string.round && 0 == @match_state_string.number_of_actions_in_current_round
+   end
+   
+   def acting_player_contributed_to_the_pot_this_round?
+      amount_contributed_over_all_rounds =
+         @pot.players_involved_and_their_amounts_contributed[player_whose_turn_is_next]
+      
+      amount_contributed_over_current_round =
+         amount_contributed_over_all_rounds[@match_state_string.round]
+      
+      amount_contributed_over_all_rounds && amount_contributed_over_current_round &&
+         (amount_contributed_over_current_round > 0)
    end
    
    def assign_users_cards!
