@@ -67,6 +67,7 @@ class MatchState
       self
    end
    
+   # @todo The logic for these should be moved into PlayerManager
    # Convienence methods for retrieving particular players
    
    # (see GameCore#player_who_submitted_small_blind)
@@ -86,7 +87,7 @@ class MatchState
    
    # @return The +Player+ who acted last or nil if none have played yet.
    def player_who_acted_last
-      return nil unless @last_match_state
+      return nil if first_state_of_the_first_round?
       @players[player_who_acted_last_index]
    end
    
@@ -125,6 +126,7 @@ class MatchState
       @players.select { |player| player.has_folded }
    end 
    
+   # @todo These should be moved into PlayerManager
    # Methods for retrieving the indices of particular players
    
    def player_with_the_dealer_button_index
@@ -157,16 +159,20 @@ class MatchState
       (first_player_position_in_current_round - 1 + @match_state_string.number_of_actions_in_current_round) % active_players.length
    end
    
+   # @todo Move to GameDefinition
    # @return [Integer] The user's position relative to the user.
    def users_position_relative_to_user
       @game_definition.number_of_players - 1
    end
    
+   # @todo Move to GameDefinition
    # @return [Integer] The dealer's position relative to the dealer.
    def dealer_position_relative_to_dealer
       @game_definition.number_of_players - 1
    end
    
+   # @todo Move to MatchstateString (it should know how many players are in
+   #  this match, but I don't remember if it does yet.)
    # @param [Integer] seat A seat at the table.
    # @return [Integer] The position relative to the dealer of the given +seat+.
    def position_relative_to_dealer(seat)
@@ -209,12 +215,10 @@ class MatchState
       @match_state_string.hand_number == @number_of_hands - 1
    end
 
-   # @todo
    def is_reverse_blinds?
       2 == @game_definition.number_of_players
    end
    
-   # @todo
    def last_round?
       @game_definition.number_of_rounds - 1 == @match_state_string.round 
    end
@@ -295,14 +299,15 @@ class MatchState
    
    private
    
+   # @todo Move to ChipManager
    def take_small_blind!
-      @pot.take
       small_blind_player = player_who_submitted_small_blind
       small_blind_player.current_wager_faced = @game_definition.small_blind
       small_blind_player.call_current_wager!
       small_blind_player.current_wager_faced = @game_definition.big_blind - @game_definition.small_blind
    end
    
+   # @todo Move to PlayerManager
    def create_players
       # The array of players is built so that it's centered on the user.
       # The user is at index USERS_INDEX = 0, the player to the user's immediate left is
@@ -320,8 +325,7 @@ class MatchState
       
       players
    end
-      
-   # (see PlayerManager#start_new_hand!)
+
    def start_new_hand!
       reset_players!
       set_initial_internal_state!
@@ -329,14 +333,20 @@ class MatchState
    
    def set_initial_internal_state!
       @pot = create_new_pot
+      # @todo Move this to PlayerManager. The betting sequence can then be
+      #  reconstructed on demand by combining the acting sequence with the
+      #  action list keep track of by each player.
       @player_acting_sequence = [[]]
       @betting_sequence = [[]]
+      
+      # @todo Move to ChipStackManager
       # @todo When pot actually becomes an array of side pots this will become: @pot_values_at_start_of_round = [0]
       @pot_values_at_start_of_round = 0
       @minimum_wager = @game_definition.minimum_wager_in_each_round.first
    end
    
-   def reset_players!      
+   # @todo Move to PlayerManager
+   def reset_players!
       @players.each_index do |i|
          @players[i].is_all_in = false
          @players[i].has_folded = false
@@ -349,18 +359,21 @@ class MatchState
       assign_users_cards!
    end
    
+   # @todo Move to PlayerManager
    def reset_actions_taken_in_current_round!
       @players.each do |player|
          player.actions_taken_in_current_round.clear
       end
    end
    
+   # @todo Move to ChipStackManager
    def create_new_pot
       pot = SidePot.new player_who_submitted_big_blind, @game_definition.big_blind
       pot.contribute! player_who_submitted_small_blind, @game_definition.small_blind
       pot
    end
 
+   # @todo Move into MatchstateString
    def first_state_of_the_first_round?
       0 == @match_state_string.round && 0 == @match_state_string.number_of_actions_in_current_round
    end
@@ -375,12 +388,14 @@ class MatchState
       amount_contributed_over_all_rounds && amount_contributed_over_current_round &&
          (amount_contributed_over_current_round > 0)
    end
-   
+
+   # @todo Move to PlayerManager
    def assign_users_cards!
       user = user_player
       user.hole_cards = @match_state_string.users_hole_cards
    end
    
+   # @todo Move to PlayerManager
    def assign_hole_cards_to_opponents!
       list_of_opponent_players.each do |opponent|
          opponent.hole_cards = @match_state_string.list_of_hole_card_hands[opponent.position_relative_to_dealer] unless opponent.has_folded
@@ -392,6 +407,7 @@ class MatchState
       @pot.distribute_chips! @match_state_string.board_cards
    end
    
+   # @todo Move to PlayerManager
    def update_state_of_players!
       last_player_to_act = @players[player_who_acted_last_index]
       
@@ -424,12 +440,6 @@ class MatchState
       if @match_state_string
          @last_round = @match_state_string.round
          @position_relative_to_dealer_acted_last = position_relative_to_dealer_next_to_act
-         # @todo Not sure if I need to keep track of this
-         @last_match_state = @match_state_string
       end
-   end
-   
-   def next_match_state
-      @proxy_bot.receive_match_state_string
    end
 end
