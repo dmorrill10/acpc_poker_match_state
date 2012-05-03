@@ -1,6 +1,6 @@
 # -*- encoding: utf-8 -*-
 $:.push File.expand_path("../lib", __FILE__)
-require "acpc_poker_match_state/version"
+require 'version'
 
 Gem::Specification.new do |s|
   s.name        = "acpc_poker_match_state"
@@ -19,7 +19,7 @@ Gem::Specification.new do |s|
 
   s.rubyforge_project = "acpc_poker_match_state"
 
-  s.files         = Dir.glob("lib/**/*") + Dir.glob("src/**/*") + Dir.glob("ext/**/*") + %w(Rakefile acpc_poker_match_state.gemspec tasks.rb README.md)
+  s.files         = Dir.glob("lib/**/*") + Dir.glob("ext/**/*") + %w(Rakefile acpc_poker_match_state.gemspec tasks.rb README.md)
   s.test_files    = Dir.glob "spec/**/*"
   s.require_paths = ["lib"]
 end

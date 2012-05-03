@@ -7,7 +7,7 @@ require File.expand_path('../../src/chip_stack_manager', __FILE__)
 describe ChipStackManager do
    #include ModelTestHelper
    
-   pending 'Updates to MatchstateString'
+   pending 'Updates to MatchStateString'
    
    #describe 'Given the holdem.nolimit.2p.reverse_blinds.game game definition' do
    #   game_definition = mock 'GameDefinition'
@@ -68,7 +68,7 @@ describe ChipStackManager do
    # Properly reports state ###################################################
    
    #it 'properly reports which player has the dealer button' do
-   #   match_state_string = mock('MatchstateString')
+   #   match_state_string = mock('MatchStateString')
    #   
    #   player_names = "p1, p2"
    #   number_of_hands = 1

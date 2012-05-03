@@ -5,7 +5,7 @@ require File.expand_path('../support/spec_helper', __FILE__)
 #require File.expand_path('../support/model_test_helper', __FILE__)
 
 # Local classes
-require File.expand_path('../../src/match_state', __FILE__)
+require File.expand_path('../../lib/acpc_poker_match_state/match_state', __FILE__)
 
 describe MatchState do
    #include ModelTestHelper
@@ -71,7 +71,7 @@ describe MatchState do
    # Properly reports state ###################################################
    
    #it 'properly reports which player has the dealer button' do
-   #   match_state_string = mock('MatchstateString')
+   #   match_state_string = mock('MatchStateString')
    #   
    #   player_names = "p1, p2"
    #   number_of_hands = 1

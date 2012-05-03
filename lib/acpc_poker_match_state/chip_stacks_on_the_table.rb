@@ -26,7 +26,7 @@ class MatchState
    attr_reader :minimum_wager
    
    # @param [GameDefinition] game_definition The definition of the game being played.
-   # @param [MatchstateString] match_state_string The initial state of this match.
+   # @param [MatchStateString] match_state_string The initial state of this match.
    # @param [Array] player_names The names of the players in this match.
    # @param [Integer] number_of_hands The number of hands in this match.
    # @todo bundle player names and number of hands into something
@@ -42,7 +42,7 @@ class MatchState
       set_initial_internal_state!
    end
    
-   # @param [MatchstateString] match_state_string The next match state.
+   # @param [MatchStateString] match_state_string The next match state.
    # @return [MatchState] The updated version of this +MatchState+.
    def update!(match_state_string)
       remember_values_from_last_round!
@@ -171,7 +171,7 @@ class MatchState
       @game_definition.number_of_players - 1
    end
    
-   # @todo Move to MatchstateString (it should know how many players are in
+   # @todo Move to MatchStateString (it should know how many players are in
    #  this match, but I don't remember if it does yet.)
    # @param [Integer] seat A seat at the table.
    # @return [Integer] The position relative to the dealer of the given +seat+.
@@ -184,7 +184,7 @@ class MatchState
       @game_definition.first_player_position_in_each_round[@match_state_string.round]
    end
    
-   # @see MatchstateString#position_relative_to_dealer
+   # @see MatchStateString#position_relative_to_dealer
    def users_position
       @match_state_string.position_relative_to_dealer
    end
@@ -373,7 +373,7 @@ class MatchState
       pot
    end
 
-   # @todo Move into MatchstateString
+   # @todo Move into MatchStateString
    def first_state_of_the_first_round?
       0 == @match_state_string.round && 0 == @match_state_string.number_of_actions_in_current_round
    end

@@ -5,77 +5,53 @@ require File.expand_path('../acpc_poker_match_state_defs', __FILE__)
 # Gems
 require 'acpc_poker_types'
 
-# @todo Extract this to a gem with easy_exceptions, maybe called class_utils
-class Class
-   private
-
-   def alias_class_method(alias_method, method_to_alias)
-      singleton_class.alias_method_in_singleton_context alias_method, method_to_alias
-   end
-   
-   class << self
-      def alias_method_in_singleton_context(alias_method, method_to_alias)
-         alias_method alias_method, method_to_alias
-      end
-   end
-end
-
-# A manager for player state.
-class PlayerManager   
+class PlayersAtTheTable
+   include AcpcPokerTypesHelper
    #include AcpcPokerTypesDefs
    #include AcpcPokerMatchStateDefs
    
-   exceptions :no_players_to_manage
-
+   exceptions :player_acted_before_sitting_at_table,
+      :no_players_to_seat
+   
    attr_reader :players
    
-   alias_class_method :manage, :new
+   alias_new :seat_players
    
-   # @param [GameDefinition] game_definition The definition of the game being played.
-   # @param [MatchstateString] match_state_string The initial state of this match.
-   # @param [Array] player_names The names of the players in this match.
-   # @param [Integer] number_of_hands The number of hands in this match.
-   # @todo bundle player names and number of hands into something
-   def initialize(player_names_to_stack_map, match_state_string)
-      list_of_player_names = player_names_to_stack_map.keys
-      number_of_players = list_of_player_names.length
-      raise NoPlayersToManage if 0 == number_of_players
-      #
-      #@players = []
-      #number_of_players.times do |player_index|
-      #   name = list_of_player_names[player_index]
-      #   seat = player_index         
-      #   my_position_relative_to_dealer = match_state_string.position_relative_to_dealer seat
-      #   position_relative_to_user = match_state_string.users_position_relative_to_user - player_index
-      #   stack = ChipStack.new player_names_to_stack_map[name].to_i
-      #   
-      #   @players << Player.new(name, seat, my_position_relative_to_dealer, position_relative_to_user, stack)
-      #end
+   # @param [Array<Player>] players The players to seat at the table.
+   def initialize(players)
+      sanity_check_player_actions players
+      
+      @players = players
+      @last_round = 0
    end
    
-   # @param [MatchstateString] match_state_string The next match state.
-   # @return [MatchState] The updated version of this +MatchState+.
+   # @return [Integer] The number of players seated at the table.
+   def number_of_players() @players.length end
+      
+   # @param [MatchStateString] match_state_string The next match state.
    def update!(match_state_string)
-      remember_values_from_last_round!
-      @match_state_string = match_state_string
       if first_state_of_the_first_round?
          start_new_hand!
-      else
-         update_state_of_players!
-         evaluate_end_of_hand! if hand_ended?
-         @player_acting_sequence[-1] << player_who_acted_last.seat
-         @betting_sequence[-1] << @match_state_string.last_action
-         if in_new_round?
-            @pot.round = @match_state_string.round
-            @player_acting_sequence << []
-            @betting_sequence << []
-            @minimum_wager = @game_definition.minimum_wager_in_each_round[@match_state_string.round]
-         end
-         # @todo When pot actually becomes an array of side pots this will become: @pot_values_at_start_of_round = @pot.map { |side_pot| side_pot.to_i }
-         @pot_values_at_start_of_round = @pot.to_i if in_new_round? || hand_ended?
+         return
       end
+      update_state_of_players!
+      evaluate_end_of_hand! if hand_ended?
+      @player_acting_sequence[-1] << player_who_acted_last.seat
+      @player_acting_sequence << [] if match_state_string.in_new_round?(@last_round)
       
-      self
+      remember_values_from_this_round!
+   end
+   
+   private
+   
+   def remember_values_from_this_round!
+      @last_round = match_state_string.round
+   end
+   
+   def sanity_check_player_actions(players)
+      players.each do |player|
+         raise PlayerActedBeforeSittingAtTable unless player.actions_taken_in_current_round.empty?
+      end
    end
    
    # @todo The logic for these should be moved into PlayerManager
@@ -108,7 +84,9 @@ class PlayerManager
    end   
    
    def user_player
-      @players[USERS_INDEX]
+      @players.each do |player|
+         return player if player.position_relative_to_user == player_position_relative_to_self(number_of_players)
+      end
    end
    
    # @return [Array<Player>] The players who are active.
@@ -182,7 +160,7 @@ class PlayerManager
       @game_definition.number_of_players - 1
    end
    
-   # @todo Move to MatchstateString (it should know how many players are in
+   # @todo Move to MatchStateString (it should know how many players are in
    #  this match, but I don't remember if it does yet.)
    # @param [Integer] seat A seat at the table.
    # @return [Integer] The position relative to the dealer of the given +seat+.
@@ -195,7 +173,7 @@ class PlayerManager
       @game_definition.first_player_position_in_each_round[@match_state_string.round]
    end
    
-   # @see MatchstateString#position_relative_to_dealer
+   # @see MatchStateString#position_relative_to_dealer
    def users_position
       @match_state_string.position_relative_to_dealer
    end
@@ -289,25 +267,8 @@ class PlayerManager
    end
 
    def start_new_hand!
-      reset_players!
-      set_initial_internal_state!
-   end
-   
-   def set_initial_internal_state!
-      @pot = create_new_pot
-      # @todo Move this to PlayerManager. The betting sequence can then be
-      #  reconstructed on demand by combining the acting sequence with the
-      #  action list keep track of by each player.
       @player_acting_sequence = [[]]
-      @betting_sequence = [[]]
       
-      # @todo Move to ChipStackManager
-      # @todo When pot actually becomes an array of side pots this will become: @pot_values_at_start_of_round = [0]
-      @pot_values_at_start_of_round = 0
-      @minimum_wager = @game_definition.minimum_wager_in_each_round.first
-   end
-   
-   def reset_players!
       @players.each_index do |i|
          @players[i].is_all_in = false
          @players[i].has_folded = false
