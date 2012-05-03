@@ -47,7 +47,7 @@ class MatchState
    def update!(match_state_string)
       remember_values_from_last_round!
       @match_state_string = match_state_string
-      if first_state_of_the_first_round?
+      if first_state_of_first_round?
          start_new_hand!
       else
          update_state_of_players!
@@ -87,7 +87,7 @@ class MatchState
    
    # @return The +Player+ who acted last or nil if none have played yet.
    def player_who_acted_last
-      return nil if first_state_of_the_first_round?
+      return nil if first_state_of_first_round?
       @players[player_who_acted_last_index]
    end
    
@@ -374,7 +374,7 @@ class MatchState
    end
 
    # @todo Move into MatchStateString
-   def first_state_of_the_first_round?
+   def first_state_of_first_round?
       0 == @match_state_string.round && 0 == @match_state_string.number_of_actions_in_current_round
    end
    

@@ -34,9 +34,43 @@ describe PlayersAtTheTable do
    end
    
    describe '#update!' do
-      pending 'a good way to do these tests easily'
+      describe 'keeps track of player positions and stacks' do
+         describe 'in two player' do
+            describe 'limit' do
+               it 'when both players always call' do
+                  init_two_player_lists do |player_list|
+                     patient = PlayersAtTheTable.seat_players(player_list)
+                     
+                     last_action = mock 'PokerAction'
+                     last_action.stubs(:to_acpc_character).raises(MatchStateString::NoActionsHaveBeenTaken)
+                     
+                     match_state = mock 'MatchStateString'
+                     match_state.stubs(:last_action).returns(last_action)
+                     match_state.stubs(:first_state_of_first_round?).returns(true)
+                     
+                     
+                     number_of_rounds = 4
+                     number_of_rounds.times do |round|
+                        number_of_states_per_round = player_list.length + 1
+                        number_of_states_per_round.times do |action_number_in_round|
+                           if 0 == round && 0 == action_number_in_round
+                              match_state.stubs(:first_state_of_first_round?).returns(false)
+                           else
+                              last_action.stubs(:to_acpc_character).returns(PokerAction::LEGAL_ACTIONS[:call])
+                           end
+                           
+                           patient.update!(match_state)
+                           
+                           # @todo check more stuff
+                           #patient.
+                        end
+                     end
+                  end
+               end
+            end
+         end
+      end
    end
-   
    def init_vanilla_player_lists
       10.times do |i|
          player_list = []
@@ -49,6 +83,16 @@ describe PlayersAtTheTable do
             yield player_list
          end
       end
+   end
+   def init_two_player_lists
+      player_list = []
+      2.times do |i|
+         player = mock('Player')
+         player.stubs(:actions_taken_in_current_round).returns([])
+            
+         player_list.push player   
+      end
+      yield player_list
    end
    
    

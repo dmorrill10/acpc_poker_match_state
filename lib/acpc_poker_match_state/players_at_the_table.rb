@@ -30,13 +30,12 @@ class PlayersAtTheTable
       
    # @param [MatchStateString] match_state_string The next match state.
    def update!(match_state_string)
-      if first_state_of_the_first_round?
-         start_new_hand!
-         return
+      if match_state_string.first_state_of_first_round?
+         return start_new_hand!
       end
       update_state_of_players!
-      evaluate_end_of_hand! if hand_ended?
-      @player_acting_sequence[-1] << player_who_acted_last.seat
+      
+      @player_acting_sequence.last << player_who_acted_last.seat
       @player_acting_sequence << [] if match_state_string.in_new_round?(@last_round)
       
       remember_values_from_this_round!
@@ -54,7 +53,6 @@ class PlayersAtTheTable
       end
    end
    
-   # @todo The logic for these should be moved into PlayerManager
    # Convienence methods for retrieving particular players
    
    # (see GameCore#player_who_submitted_small_blind)
@@ -72,9 +70,9 @@ class PlayersAtTheTable
       @players[player_whose_turn_is_next_index]
    end
    
-   # @return The +Player+ who acted last or nil if none have played yet.
+   # @return The +Player+ who acted last.
+   # @raise (see #player_who_acted_last_index)
    def player_who_acted_last
-      return nil if first_state_of_the_first_round?
       @players[player_who_acted_last_index]
    end
    
@@ -115,7 +113,6 @@ class PlayersAtTheTable
       @players.select { |player| player.has_folded }
    end 
    
-   # @todo These should be moved into PlayerManager
    # Methods for retrieving the indices of particular players
    
    def player_with_the_dealer_button_index
@@ -136,7 +133,10 @@ class PlayersAtTheTable
       @players.index { |player| player.position_relative_to_dealer == position_relative_to_dealer_next_to_act }
    end
    
+   # @raise MatchStateString::NoActionsHaveBeenTaken if no actions have been
+   #  taken.
    def player_who_acted_last_index
+      raise MatchStateString::NoActionsHaveBeenTaken unless @position_relative_to_dealer_acted_last
       @players.index { |player| player.position_relative_to_dealer == @position_relative_to_dealer_acted_last }
    end
    
@@ -270,26 +270,16 @@ class PlayersAtTheTable
       @player_acting_sequence = [[]]
       
       @players.each_index do |i|
-         @players[i].is_all_in = false
-         @players[i].has_folded = false
-         @players[i].chip_stack = ChipStack.new @game_definition.list_of_player_stacks[i] # @todo if @is_doyles_game
-         @players[i].position_relative_to_dealer = position_relative_to_dealer @players[i].seat
-         @players[i].hole_cards = Hand.new
+         player = @players[i]
+         
+         player.start_new_hand! position_relative_to_dealer(player.seat),
+            ChipStack.new(@game_definition.list_of_player_stacks[i]), # @todo if @is_doyles_game
+            lambda{if user_player.equals?(player)
+                     @match_state_string.users_hole_cards
+                  else
+                     Hand.new
+                  end}.call
       end
-      
-      reset_actions_taken_in_current_round!
-      assign_users_cards!
-   end
-   
-   def reset_actions_taken_in_current_round!
-      @players.each do |player|
-         player.actions_taken_in_current_round.clear
-      end
-   end
-   
-   def assign_users_cards!
-      user = user_player
-      user.hole_cards = @match_state_string.users_hole_cards
    end
    
    def assign_hole_cards_to_opponents!
@@ -299,19 +289,19 @@ class PlayersAtTheTable
    end
    
    def update_state_of_players!
-      last_player_to_act = @players[player_who_acted_last_index]
+      #last_player_to_act = @players[player_who_acted_last_index]
       
       if @last_round != @match_state_string.round
          reset_actions_taken_in_current_round!
       else
-         last_player_to_act.actions_taken_in_current_round << @match_state_string.last_action
+         player_who_acted_last.actions_taken_in_current_round << @match_state_string.last_action
       end
 
       acpc_action = @match_state_string.last_action.to_acpc_character
       if 'c' == acpc_action || 'k' == acpc_action
-         @pot.take_call! last_player_to_act
+         @pot.take_call! player_who_acted_last
       elsif 'f' == acpc_action
-         last_player_to_act.has_folded = true
+         player_who_acted_last.has_folded = true
       elsif 'r' == acpc_action || 'b' == acpc_action
          amount_put_in_pot_after_calling = @pot.players_involved_and_their_amounts_contributed[last_player_to_act].sum + @pot.amount_to_call(last_player_to_act)
          amount_to_raise_to = if @match_state_string.last_action.modifier
@@ -319,10 +309,12 @@ class PlayersAtTheTable
          else
             @minimum_wager + amount_put_in_pot_after_calling
          end
-         @pot.take_raise! last_player_to_act, amount_to_raise_to
+         @pot.take_raise! player_who_acted_last, amount_to_raise_to
          @minimum_wager = amount_to_raise_to - amount_put_in_pot_after_calling
       else
          raise PokerAction::IllegalPokerAction, acpc_action
       end
+      
+      assign_hole_cards_to_opponents! if hand_ended?
    end
 end

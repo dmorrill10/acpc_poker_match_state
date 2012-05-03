@@ -47,7 +47,7 @@ class MatchState
    def update!(match_state_string)
       remember_values_from_last_round!
       @match_state_string = match_state_string
-      if first_state_of_the_first_round?
+      if first_state_of_first_round?
          start_new_hand!
       else
          update_state_of_players!
@@ -87,7 +87,7 @@ class MatchState
    
    # @return The +Player+ who acted last or nil if none have played yet.
    def player_who_acted_last
-      return nil if first_state_of_the_first_round?
+      return nil if first_state_of_first_round?
       @players[player_who_acted_last_index]
    end
    
@@ -239,11 +239,6 @@ class MatchState
    # @return [Boolean] +true+ if any opponents cards are visible, +false+ otherwise.
    def opponents_cards_visible?
       are_visible = (@match_state_string.list_of_opponents_hole_cards.length > 0 && !@match_state_string.list_of_opponents_hole_cards[0].empty?)
-   end
-   
-   # @return [Boolean] +true+ if the current round is a later round than the round in which the last action was taken, +false+ otherwise.
-   def in_new_round?
-      @match_state_string.round > @last_round
    end
    
    # Player chip information
