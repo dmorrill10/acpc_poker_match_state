@@ -13,7 +13,8 @@ class PlayersAtTheTable
    exceptions :player_acted_before_sitting_at_table,
       :no_players_to_seat, :users_seat_out_of_bounds,
       :multiple_players_have_the_same_seat, :insufficient_first_positions_provided,
-      :first_position_out_of_bounds, :no_player_to_act_after_n_actions
+      :first_position_out_of_bounds, :no_player_to_act_after_n_actions,
+      :blind_position_out_of_bounds
    
    attr_reader :players
    
@@ -29,10 +30,15 @@ class PlayersAtTheTable
    # @param [Integer] users_seat The user's seat at the table.
    # @param [Array<Integer>] first_positions_relative_to_dealer The first position
    #  relative to the dealer to act in every round.
-   def initialize(players, users_seat, first_positions_relative_to_dealer)
+   # @param [Hash<Integer, #to_i>] blinds The relation between the position
+   #  relative to the dealer and the blind amount.
+   def initialize(players, users_seat, first_positions_relative_to_dealer,
+                  blinds)
       @players = sanity_check_players players
       
       @first_positions_relative_to_dealer = sanity_check_first_positions first_positions_relative_to_dealer
+      
+      @blinds = sanity_check_blinds blinds
       
       @users_seat = if users_seat.seat_in_bounds?(number_of_players) && @players.any?{|player| player.seat == users_seat}
          users_seat
@@ -58,12 +64,29 @@ class PlayersAtTheTable
          
       update_state_of_players! match_state_string
       
-      puts "@last_round: #{@last_round}, round: #{match_state_string.round}"
-      
       @player_acting_sequence.last << player_who_acted_last.seat
       @player_acting_sequence << [] if match_state_string.in_new_round?(@last_round)
       
       remember_values_from_this_state! match_state_string
+   end
+   
+   # @return [Player] The player who acted last.
+   def player_who_acted_last
+      return nil unless round && number_of_actions_in_current_round > 0
+      
+      player_to_act_after_n_actions number_of_actions_in_current_round - 1
+   end
+   
+   # @return [Player] The player who is next to act.
+   def next_player_to_act
+      return nil unless round
+      
+      p1 = player_to_act_after_n_actions number_of_actions_in_current_round
+      
+      
+      #puts "next_player_to_act: #{active_players.index { |player| player.equals?(p1)}}"
+      
+      p1
    end
    
    private
@@ -121,26 +144,24 @@ class PlayersAtTheTable
       out_of_bounds_first_position = first_positions_relative_to_dealer.find do |position|
          !position.seat_in_bounds?(number_of_players)
       end
-      raise FirstPositionOutOfBounds, out_of_bounds_first_position if out_of_bounds_first_position
+         
+      if out_of_bounds_first_position
+         raise FirstPositionOutOfBounds, out_of_bounds_first_position.to_s
+      end
       
       first_positions_relative_to_dealer
    end
    
-   # @return [Player] The player who acted last.
-   def player_who_acted_last
-      raise MatchStateString::NoActionsHaveBeenTaken unless number_of_actions_in_current_round > 0
+   def sanity_check_blinds(blinds)
+      out_of_bounds_blind_position = blinds.keys.find do |position|
+         !position.seat_in_bounds?(number_of_players)
+      end
       
-      player_to_act_after_n_actions number_of_actions_in_current_round - 1
-   end
-   
-   # @return [Player] The player who is next to act.
-   def next_player_to_act
-      p1 = player_to_act_after_n_actions number_of_actions_in_current_round
+      if out_of_bounds_blind_position
+         raise BlindPositionOutOfBounds, out_of_bounds_blind_position.to_s
+      end
       
-      
-      puts "next_player_to_act: #{active_players.index { |player| player.equals?(p1)}}"
-      
-      p1
+      blinds
    end
    
    # @param [Integer] n A number of actions.
@@ -149,7 +170,7 @@ class PlayersAtTheTable
    # @raise NoActionsHaveBeenTaken
    def player_to_act_after_n_actions(n)
       
-      puts "@first_positions_relative_to_dealer: #{@first_positions_relative_to_dealer}, n: #{n}"
+      #puts "@first_positions_relative_to_dealer: #{@first_positions_relative_to_dealer}, n: #{n}"
       
       begin
          position_relative_to_dealer_to_act = (@first_positions_relative_to_dealer[@round] + n) % number_of_players
@@ -167,7 +188,7 @@ class PlayersAtTheTable
    def number_of_actions_in_current_round
       @players.inject(0) do |sum, player|
          
-         puts "player.seat: #{player.seat}, actions_taken_in_current_hand: #{player.actions_taken_in_current_hand}"
+         #puts "player.seat: #{player.seat}, actions_taken_in_current_hand: #{player.actions_taken_in_current_hand}"
          
          sum += player.actions_taken_in_current_hand[@round].length
       end
@@ -203,7 +224,7 @@ class PlayersAtTheTable
       
       next_player_to_act.take_action! match_state_string.last_action
       
-      puts "taken action"
+      #puts "taken action"
       
       assign_hole_cards_to_opponents!(match_state_string) if hand_ended?
    end
@@ -356,5 +377,13 @@ class PlayersAtTheTable
          string += '/' unless i == @match_state_string.round
       end
       string
+   end
+end
+
+class Array
+   def find_out_of_bounds_seat(number_of_players)
+      self.find do |position|
+         !position.seat_in_bounds?(number_of_players)
+      end
    end
 end
