@@ -4,9 +4,101 @@ require File.expand_path('../support/spec_helper', __FILE__)
 # Local classes
 require File.expand_path('../../lib/acpc_poker_match_state/players_at_the_table', __FILE__)
 
+
+# @todo Move this to its own gem ##########33
+
+class Symbol
+   def to_setter_signature
+      "#{self}=".to_sym
+   end
+end
+
+require 'acpc_poker_types/mixins/utils'
+
+class TestExample
+   
+   exceptions :no_properties_for_given, :no_properties_for_then
+   
+   attr_reader :description
+   
+   attr_reader :given
+   
+   attr_reader :then
+   
+   def initialize(example_description, example_data_catagories)
+      @description = example_description
+      
+      @given = {}
+      @then = {}
+      
+      given_properties = example_data_catagories[:given]
+      
+      raise NoPropertiesForGiven unless given_properties
+      
+      then_properties = example_data_catagories[:then]
+      
+      raise NoPropertiesForThen unless then_properties
+      
+      given_properties.each do |property|
+         define_getter_and_setter @given, property
+      end
+      
+      then_properties.each do |property|
+         define_getter_and_setter @then, property
+      end
+   end
+   
+   def to_s
+      given_as_string = partition_to_string @given
+      then_as_string = partition_to_string @then
+      
+      "#{@description}: given: #{given_as_string}, then: #{then_as_string}"
+   end
+   
+   private
+   
+   def partition_to_string(partition)
+      partition.map do |key_value_pair|
+         key_value_pair.join(' is ')
+      end.join(', and')
+   end
+   
+   def define_getter_and_setter(instance_on_which_to_define, property)
+      define_getter instance_on_which_to_define, property
+      define_setter instance_on_which_to_define, property
+   end
+   
+   def define_getter(instance_on_which_to_define, property)
+      signature = property.to_sym
+      instance_on_which_to_define.singleton_class.send(:define_method, signature) do
+         instance_on_which_to_define[property.to_sym]
+      end
+   end
+   
+   def define_setter(instance_on_which_to_define, property)
+      signature = property.to_sym.to_setter_signature
+      instance_on_which_to_define.singleton_class.send(:define_method, signature) do |to_set|
+         store(property.to_sym, to_set)
+      end
+   end
+end
+
+###############
+
+
+
+
+
 describe PlayersAtTheTable do
    before(:each) do
       @users_seat = 0
+      
+      ex = TestExample.new 'initial example', given: [:g1, :g2], then: [:t1, :t2]
+      
+      ex.given.g1 = 'hello'
+      ex.then.t2 = 'world'
+      
+      puts ex.to_s
    end
    
    describe '::seat_players' do
@@ -79,11 +171,12 @@ describe PlayersAtTheTable do
       end
       it 'keeps track of the players it seats' do
          init_vanilla_player_lists do |player_list|
-            @patient = PlayersAtTheTable.seat_players(player_list, @users_seat,
-                                                      first_positions_relative_to_dealer(1))
-            @patient.players.should == player_list
+            pending
+            #@patient = PlayersAtTheTable.seat_players(player_list, @users_seat,
+                                                      #first_positions_relative_to_dealer(1))
+            #@patient.players.should == player_list
             
-            check_patient_constants_from_initialization player_list
+            #check_patient_constants_from_initialization player_list
          end
       end
    end
