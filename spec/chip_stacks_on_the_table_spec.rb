@@ -32,7 +32,7 @@ describe ChipStackManager do
    #   @players = []
    #   @game_definition.number_of_players.times do |i|
    #      @players << mock('Player')
-   #      @players[i].stubs(:is_active?).returns(true)
+   #      @players[i].stubs(:active?).returns(true)
    #      @players[i].stubs(:is_all_in=).with(false)
    #      @players[i].stubs(:has_folded=).with(false)
    #      @players[i].stubs(:has_folded).returns(false)

@@ -5,65 +5,117 @@ require File.expand_path('../support/spec_helper', __FILE__)
 require File.expand_path('../../lib/acpc_poker_match_state/players_at_the_table', __FILE__)
 
 describe PlayersAtTheTable do
+   before(:each) do
+      @users_seat = 0
+   end
    
    describe '::seat_players' do
-      describe 'raises an exception if' do
-         it 'is given an empty list of players' do
-            expect{PlayersAtTheTable.seat_players([])}.to
-               raise_exception(PlayersAtTheTable::NoPlayersToSeat)
+      describe 'raises an exception if it is given' do
+         it 'an empty list of players' do
+            expect do
+               PlayersAtTheTable.seat_players([], @users_seat,
+                                              first_positions_relative_to_dealer(1))
+            end.to raise_exception(PlayersAtTheTable::NoPlayersToSeat)
          end
-         it 'is given at least one player who has already acted' do
+         it 'at least one player who has already acted' do
             init_vanilla_player_lists do |player_list|
-               player_list[0].stubs(:actions_taken_in_current_round).returns([mock('Action')])
+               player_list[0].stubs(:actions_taken_in_current_hand).returns([[mock('Action')]])
+               expect do
+                  PlayersAtTheTable.seat_players(player_list, @users_seat,
+                                                 first_positions_relative_to_dealer(1))
+               end.to raise_exception(PlayersAtTheTable::PlayerActedBeforeSittingAtTable)
             end
-            expect{PlayersAtTheTable.seat_players(player_list)}.to
-               raise_exception(PlayersAtTheTable::PlayerActedBeforeSittingAtTable)
+         end
+         it 'an out of bounds user seat' do
+            [-1, 2].each do |out_of_bounds_seat|
+               init_two_player_lists do |player_list|
+                  expect do
+                     PlayersAtTheTable.seat_players(player_list,
+                                                    out_of_bounds_seat,
+                                                    first_positions_relative_to_dealer(1))
+                  end.to raise_exception(PlayersAtTheTable::UsersSeatOutOfBounds)
+               end
+            end
+            init_two_player_lists do |player_list|
+               # Increment each player's seat in order to make sure no player is in seat zero
+               player_list.map do |player|
+                  old_seat = player.seat
+                  player.stubs(:seat).returns(old_seat + 1)
+               end
+               
+               expect do
+                  PlayersAtTheTable.seat_players(player_list, 0,
+                                                 first_positions_relative_to_dealer(1))
+               end.to raise_exception(PlayersAtTheTable::UsersSeatOutOfBounds)
+            end
+         end
+         it 'multiple players with the same seat' do
+            init_vanilla_player_lists do |player_list|
+               next if player_list.length < 2
+               
+               player_list.last.stubs(:seat).returns(0)
+               
+               expect do
+               PlayersAtTheTable.seat_players(player_list, @users_seat,
+                                              first_positions_relative_to_dealer(1))
+               end.to raise_exception(PlayersAtTheTable::MultiplePlayersHaveTheSameSeat)
+            end
+         end
+         it 'a first position relative to the dealer that is out of bounds' do
+            init_vanilla_player_lists do |player_list|
+               expect do
+                  PlayersAtTheTable.seat_players(player_list, @users_seat,
+                                                 [player_list.length])
+               end.to raise_exception(PlayersAtTheTable::FirstPositionOutOfBounds)
+            end
+         end
+         it 'an empty list of first positions' do
+            init_vanilla_player_lists do |player_list|
+               expect do
+                  PlayersAtTheTable.seat_players(player_list, @users_seat, [])
+               end.to raise_exception(PlayersAtTheTable::InsufficientFirstPositionsProvided)
+            end
          end
       end
       it 'keeps track of the players it seats' do
          init_vanilla_player_lists do |player_list|
-            PlayersAtTheTable.seat_players(player_list).players.should == player_list
+            @patient = PlayersAtTheTable.seat_players(player_list, @users_seat,
+                                                      first_positions_relative_to_dealer(1))
+            @patient.players.should == player_list
+            
+            check_patient_constants_from_initialization player_list
          end
       end
    end
-   
-   it '#number_of_players reports correctly' do
-      init_vanilla_player_lists do |player_list|
-         PlayersAtTheTable.seat_players(player_list).number_of_players.should == player_list.length
-      end
-   end
-   
    describe '#update!' do
       describe 'keeps track of player positions and stacks' do
+         it 'after the initial state, before any actions' do
+            init_vanilla_player_lists do |player_list|
+               @patient = PlayersAtTheTable.seat_players(player_list,
+                                                         @users_seat,
+                                                         first_positions_relative_to_dealer(1))
+               match_state = initial_vanilla_match_state player_list
+               
+               @patient.update! match_state
+               
+               check_patient_data match_state, player_list, [[]]
+            end
+         end
          describe 'in two player' do
             describe 'limit' do
                it 'when both players always call' do
                   init_two_player_lists do |player_list|
-                     patient = PlayersAtTheTable.seat_players(player_list)
-                     
-                     last_action = mock 'PokerAction'
-                     last_action.stubs(:to_acpc_character).raises(MatchStateString::NoActionsHaveBeenTaken)
-                     
-                     match_state = mock 'MatchStateString'
-                     match_state.stubs(:last_action).returns(last_action)
-                     match_state.stubs(:first_state_of_first_round?).returns(true)
-                     
-                     
                      number_of_rounds = 4
-                     number_of_rounds.times do |round|
-                        number_of_states_per_round = player_list.length + 1
-                        number_of_states_per_round.times do |action_number_in_round|
-                           if 0 == round && 0 == action_number_in_round
-                              match_state.stubs(:first_state_of_first_round?).returns(false)
-                           else
-                              last_action.stubs(:to_acpc_character).returns(PokerAction::LEGAL_ACTIONS[:call])
-                           end
-                           
-                           patient.update!(match_state)
-                           
-                           # @todo check more stuff
-                           #patient.
-                        end
+                     @fprtd = first_positions_relative_to_dealer(number_of_rounds)
+                     
+                     @patient = PlayersAtTheTable.seat_players(player_list,
+                                                               @users_seat,
+                                                               @fprtd)
+                     always_call_state_sequence(number_of_rounds, player_list) do |match_state, player_acting_sequence|
+                        
+                        @patient.update! match_state
+                        
+                        check_patient_data match_state, player_list, player_acting_sequence
                      end
                   end
                end
@@ -71,14 +123,170 @@ describe PlayersAtTheTable do
          end
       end
    end
+   
+   def always_call_state_sequence(number_of_rounds, player_list)
+      initial_match_state = initial_vanilla_match_state(player_list)
+      yield initial_match_state, [[]]
+      
+      player_list[@users_seat].stubs(:hole_cards).returns(initial_match_state.users_hole_cards)
+      
+      each_player_actions_taken_in_current_hand = []
+      player_list.length.times do |i|
+         each_player_actions_taken_in_current_hand << [[]]
+      end
+      
+      # @todo Refactor this block ############
+      
+      action = init_vanilla_action
+      action.stubs(:to_acpc_character).returns(PokerAction::LEGAL_ACTIONS[:call])
+      
+      initial_match_state.stubs(:last_action).returns(action)
+      
+      initial_match_state.last_action.stubs(:to_acpc_character).returns(PokerAction::LEGAL_ACTIONS[:call])
+      
+      acting_player_index = (@fprtd[initial_match_state.round] + 0) % player_list.length
+      player_acting_sequence = [[acting_player_index]]
+      
+      action_appended = states('action_appended').starts_as('no')
+      
+      actions_before = []
+      each_player_actions_taken_in_current_hand[acting_player_index].each do |elem|
+         actions_before << elem.dup
+      end            
+      player_list[acting_player_index].stubs(:actions_taken_in_current_hand).returns(actions_before).when(action_appended.is('no'))
+      
+      each_player_actions_taken_in_current_hand[acting_player_index].last << action
+      
+      puts "each_player_actions_taken_in_current_hand before: #{actions_before}"
+      puts "each_player_actions_taken_in_current_hand after: #{each_player_actions_taken_in_current_hand}"
+      
+      player_list[acting_player_index].expects(:take_action!).with(action).then(action_appended.is('yes'))
+      player_list[acting_player_index].stubs(:actions_taken_in_current_hand).returns(each_player_actions_taken_in_current_hand[acting_player_index]).when(action_appended.is('yes'))
+      
+      player_list.each do |player|
+         player.stubs(:active?).returns(true)
+         player.stubs(:folded?).returns(false)
+      end
+      
+      initial_match_state = initial_round_vanilla_match_state_with_action initial_match_state
+      yield initial_match_state, player_acting_sequence
+      
+      # @todo Refactor this block ############
+      
+      
+      
+      
+      sequence_of_vanilla_match_states_over_rounds(initial_match_state,
+                                                   number_of_rounds,
+                                                   player_list) do |match_state|
+         player_acting_sequence << []
+         
+         unless 0 == match_state.round
+            each_player_actions_taken_in_current_hand.each do |action_list|
+               action_list << []
+            end
+            player_list.each { |player| player.expects(:start_next_round!) }
+         end
+         
+         states_per_round = player_list.length
+         states_per_round.times do |state_number|
+            
+            match_state.stubs(:last_action).returns(action)
+            
+            acting_player_index = (@fprtd[match_state.round] + state_number) % player_list.length
+            
+            player_acting_sequence.last << acting_player_index
+            
+            puts "acting_player_index: #{acting_player_index}"
+            
+            action_appended = states('action_appended').starts_as('no')
+            
+            actions_before = []
+            each_player_actions_taken_in_current_hand[acting_player_index].each do |elem|
+               actions_before << elem.dup
+            end            
+            player_list[acting_player_index].stubs(:actions_taken_in_current_hand).returns(actions_before).when(action_appended.is('no'))
+            
+            each_player_actions_taken_in_current_hand[acting_player_index].last << action
+            
+            puts "each_player_actions_taken_in_current_hand before: #{actions_before}"
+            puts "each_player_actions_taken_in_current_hand after: #{each_player_actions_taken_in_current_hand}"
+            
+            player_list[acting_player_index].expects(:take_action!).with(action).then(action_appended.is('yes'))
+            player_list[acting_player_index].stubs(:actions_taken_in_current_hand).returns(each_player_actions_taken_in_current_hand[acting_player_index]).when(action_appended.is('yes'))
+            
+            player_list.each do |player|
+               player.stubs(:active?).returns(true)
+               player.stubs(:folded?).returns(false)
+            end
+            
+            yield match_state, player_acting_sequence
+         end
+      end
+   end
+   def opponents_from_players(players)
+      opponents = []
+      players.each_index do |i|
+         opponents << player_list[i] unless @users_seat == i
+      end
+      opponents
+   end
+   def sequence_of_vanilla_match_states_over_rounds(initial_match_state,
+                                                    number_of_rounds,
+                                                    player_list)      
+      (number_of_rounds-1).times do |round|
+         initial_match_state.stubs(:round).returns(round+1)
+         initial_match_state.stubs(:in_new_round?).with(round+1).returns(false)
+         initial_match_state.stubs(:in_new_round?).with(round).returns(true)
+         
+         yield initial_match_state
+      end
+   end
+   def initial_vanilla_match_state(player_list)
+      match_state = mock 'MatchStateString'
+      
+      match_state.stubs(:first_state_of_first_round?).returns(true)
+      match_state.stubs(:position_relative_to_dealer).returns(@users_seat)
+      match_state.stubs(:round).returns(0)
+      
+      users_hand = init_vanilla_hand
+      users_hand.stubs(:empty?).returns(false)
+      
+      match_state.stubs(:users_hole_cards).returns(users_hand)
+                     
+      player_list.each do |player|
+         player.stubs(:equals?).returns(false)
+         player.stubs(:equals?).with(player).returns(true)
+         player.expects(:start_new_hand!)
+      end
+      
+      match_state
+   end
+   def initial_round_vanilla_match_state_with_action(previous_match_state)
+      previous_match_state.stubs(:first_state_of_first_round?).returns(false)
+      previous_match_state.stubs(:round).returns(0)
+      previous_match_state.stubs(:in_new_round?).with(0).returns(false)
+      
+      
+      
+      previous_match_state
+   end
+   def init_vanilla_hand
+      hand = mock 'Hand'
+      hand.stubs(:empty?).returns(true)
+      
+      hand
+   end
+   def init_vanilla_action
+      action = mock 'PokerAction'
+      
+      action
+   end
    def init_vanilla_player_lists
       10.times do |i|
          player_list = []
          (i+1).times do |j|
-            player = mock('Player')
-            player.stubs(:actions_taken_in_current_round).returns([])
-            
-            player_list.push player
+            player_list.push init_vanilla_player(j)
             
             yield player_list
          end
@@ -86,17 +294,43 @@ describe PlayersAtTheTable do
    end
    def init_two_player_lists
       player_list = []
-      2.times do |i|
-         player = mock('Player')
-         player.stubs(:actions_taken_in_current_round).returns([])
-            
-         player_list.push player   
+      2.times do |i|            
+         player_list.push init_vanilla_player(i)
       end
       yield player_list
    end
-   
-   
-   
+   def init_vanilla_player(seat)
+      player = mock('Player')
+      player.stubs(:actions_taken_in_current_hand).returns([[]])
+      player.stubs(:seat).returns(seat)
+      player.stubs(:chip_stack).returns(10)
+      player.stubs(:hole_cards).returns(init_vanilla_hand)
+      
+      player
+   end
+   def first_positions_relative_to_dealer(number_of_rounds)
+      [].fill 0, 0..(number_of_rounds - 1)
+   end
+   def check_patient_data(match_state,
+                          players,
+                          player_acting_sequence)
+      check_patient_constants_from_initialization players
+      
+      @patient.round.should == match_state.round
+      @patient.player_acting_sequence.should == player_acting_sequence
+      
+      # @todo clarification of interface
+      #@patient.players[@users_seat].
+   end
+   def check_patient_constants_from_initialization(players)
+      @patient.number_of_players.should == players.length
+      
+      # @todo clarification of interface
+      #players.each do |player|
+      #   @patient.position_relative_to_user(player).should == positions_relative_to_user[player]
+      #   @patient.position_relative_to_user(player).should == positions_relative_to_user[player]
+      #end
+   end
    
    
    

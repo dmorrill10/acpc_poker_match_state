@@ -11,47 +11,243 @@ class PlayersAtTheTable
    #include AcpcPokerMatchStateDefs
    
    exceptions :player_acted_before_sitting_at_table,
-      :no_players_to_seat
+      :no_players_to_seat, :users_seat_out_of_bounds,
+      :multiple_players_have_the_same_seat, :insufficient_first_positions_provided,
+      :first_position_out_of_bounds, :no_player_to_act_after_n_actions
    
    attr_reader :players
+   
+   # @return [Integer, NilClass] The current round, if a match state has been seen, otherwise +nil+.
+   attr_reader :round
+   
+   # @return [Array<Array<Integer>>] The sequence of seats that acted, separated by round, or +nil+ if no actions have been taken.
+   attr_reader :player_acting_sequence
    
    alias_new :seat_players
    
    # @param [Array<Player>] players The players to seat at the table.
-   def initialize(players)
-      sanity_check_player_actions players
+   # @param [Integer] users_seat The user's seat at the table.
+   # @param [Array<Integer>] first_positions_relative_to_dealer The first position
+   #  relative to the dealer to act in every round.
+   def initialize(players, users_seat, first_positions_relative_to_dealer)
+      @players = sanity_check_players players
       
-      @players = players
-      @last_round = 0
+      @first_positions_relative_to_dealer = sanity_check_first_positions first_positions_relative_to_dealer
+      
+      @users_seat = if users_seat.seat_in_bounds?(number_of_players) && @players.any?{|player| player.seat == users_seat}
+         users_seat
+      else
+         raise UsersSeatOutOfBounds, @users_seat
+      end
+      
+      @initial_stacks = @players.map { |player| player.chip_stack }
    end
    
    # @return [Integer] The number of players seated at the table.
    def number_of_players() @players.length end
-      
+   
    # @param [MatchStateString] match_state_string The next match state.
    def update!(match_state_string)
+      @round = match_state_string.round
+      @users_position_relative_to_dealer = match_state_string.position_relative_to_dealer
+      
       if match_state_string.first_state_of_first_round?
-         return start_new_hand!
+         start_new_hand! match_state_string
+         return remember_values_from_this_state! match_state_string
       end
-      update_state_of_players!
+         
+      update_state_of_players! match_state_string
+      
+      puts "@last_round: #{@last_round}, round: #{match_state_string.round}"
       
       @player_acting_sequence.last << player_who_acted_last.seat
       @player_acting_sequence << [] if match_state_string.in_new_round?(@last_round)
       
-      remember_values_from_this_round!
+      remember_values_from_this_state! match_state_string
    end
    
    private
    
-   def remember_values_from_this_round!
+   # @param [Integer] player The player of which the position relative to the
+   #  dealer is desired.
+   # @return [Integer] The position relative to the user of the given player,
+   #  +player+, indexed such that the player immediately to the left of the
+   #  dealer has a +position_relative_to_dealer+ of zero.
+   # @example The player immediately to the left of the user has
+   #     +position_relative_to_user+ == 0
+   # @example The user has
+   #     +position_relative_to_user+ == +number_of_players+ - 1
+   # @raise (see Integer#position_relative_to)
+   def position_relative_to_user(player)
+      player.seat.position_relative_to user_player.seat, number_of_players
+   end
+   
+   # @param [Integer] player The player of which the position relative to the
+   #  dealer is desired.
+   # @return [Integer] The position relative to the dealer of the given player,
+   #  +player+, indexed such that the player immediately to to the left of the
+   #  dealer has a +position_relative_to_dealer+ of zero.
+   # @raise (see Integer#seat_from_relative_position)
+   # @raise (see Integer#position_relative_to)
+   def position_relative_to_dealer(player)
+      seat_of_dealer = @users_seat.seat_from_relative_position(
+         @users_position_relative_to_dealer, number_of_players)
+      
+      player.seat.position_relative_to seat_of_dealer, number_of_players
+   end
+   
+   def remember_values_from_this_state!(match_state_string)
       @last_round = match_state_string.round
    end
    
-   def sanity_check_player_actions(players)
+   def sanity_check_players(players)
+      raise NoPlayersToSeat if players.empty?
       players.each do |player|
-         raise PlayerActedBeforeSittingAtTable unless player.actions_taken_in_current_round.empty?
+         if player.actions_taken_in_current_hand.any? do |actions_in_round|
+               !actions_in_round.empty?
+            end
+            raise PlayerActedBeforeSittingAtTable
+         end
+      end
+      
+      raise MultiplePlayersHaveTheSameSeat if players.uniq!{ |player| player.seat }
+      
+      players
+   end
+   
+   def sanity_check_first_positions(first_positions_relative_to_dealer)
+      raise InsufficientFirstPositionsProvided, 1 if first_positions_relative_to_dealer.empty?
+      
+      out_of_bounds_first_position = first_positions_relative_to_dealer.find do |position|
+         !position.seat_in_bounds?(number_of_players)
+      end
+      raise FirstPositionOutOfBounds, out_of_bounds_first_position if out_of_bounds_first_position
+      
+      first_positions_relative_to_dealer
+   end
+   
+   # @return [Player] The player who acted last.
+   def player_who_acted_last
+      raise MatchStateString::NoActionsHaveBeenTaken unless number_of_actions_in_current_round > 0
+      
+      player_to_act_after_n_actions number_of_actions_in_current_round - 1
+   end
+   
+   # @return [Player] The player who is next to act.
+   def next_player_to_act
+      p1 = player_to_act_after_n_actions number_of_actions_in_current_round
+      
+      
+      puts "next_player_to_act: #{active_players.index { |player| player.equals?(p1)}}"
+      
+      p1
+   end
+   
+   # @param [Integer] n A number of actions.
+   # @return [Player] The player who is next to act after +n+ actions.
+   # @raise InsufficientFirstPositionsProvided
+   # @raise NoActionsHaveBeenTaken
+   def player_to_act_after_n_actions(n)
+      
+      puts "@first_positions_relative_to_dealer: #{@first_positions_relative_to_dealer}, n: #{n}"
+      
+      begin
+         position_relative_to_dealer_to_act = (@first_positions_relative_to_dealer[@round] + n) % number_of_players
+      rescue
+         raise InsufficientFirstPositionsProvided, @round - (@first_positions_relative_to_dealer.length - 1)
+      end
+      
+      player_to_act = active_players.find { |player| position_relative_to_dealer(player) >= position_relative_to_dealer_to_act }
+      
+      raise NoPlayerToActAfterNActions, n unless player_to_act
+      
+      player_to_act
+   end
+   
+   def number_of_actions_in_current_round
+      @players.inject(0) do |sum, player|
+         
+         puts "player.seat: #{player.seat}, actions_taken_in_current_hand: #{player.actions_taken_in_current_hand}"
+         
+         sum += player.actions_taken_in_current_hand[@round].length
       end
    end
+   
+   def start_new_hand!(match_state_string)
+      @player_acting_sequence = [[]]
+      
+      @players.each_index do |i|
+         player = @players[i]
+         
+         player.start_new_hand! @initial_stacks[i], # @todo if @is_doyles_game
+            lambda{if user_player.equals?(player)
+                     match_state_string.users_hole_cards
+                  else
+                     Hand.new
+                  end}.call
+      end
+   end
+   
+   def assign_hole_cards_to_opponents!(match_state_string)
+      opponents.each do |opponent|
+         unless opponent.folded?
+            opponent.hole_cards = match_state_string.list_of_hole_card_hands[position_relative_to_dealer(opponent)]
+         end
+      end
+   end
+   
+   def update_state_of_players!(match_state_string)
+      if @last_round != match_state_string.round
+         @players.each { |player| player.start_next_round! }
+      end
+      
+      next_player_to_act.take_action! match_state_string.last_action
+      
+      puts "taken action"
+      
+      assign_hole_cards_to_opponents!(match_state_string) if hand_ended?
+   end
+   
+   def opponents
+      @players.select { |player| player.seat != @users_seat }
+   end
+   
+   def user_player
+      @players.find { |player| @users_seat == player.seat }
+   end
+   
+   # @return [Array<Player>] The players who are active.
+   def active_players
+      @players.select { |player| player.active? }
+   end
+   
+   #@return [Array<Player>] The players who have not folded.
+   def non_folded_players
+      @players.select { |player| !player.folded? }
+   end
+   
+   # @return [Boolean] +true+ if the hand has ended, +false+ otherwise.
+   def hand_ended?
+      less_than_two_non_folded_players? || reached_showdown?
+   end
+   
+   def less_than_two_non_folded_players?   
+      non_folded_players.length < 2
+   end
+   
+   def reached_showdown?
+      opponents_cards_visible?
+   end
+   
+   # @return [Boolean] +true+ if any opponents cards are visible, +false+ otherwise.
+   def opponents_cards_visible?
+      opponents.any? { |player| !player.hole_cards.empty? }
+   end
+   
+   
+   
+   
+   
    
    # Convienence methods for retrieving particular players
    
@@ -65,53 +261,10 @@ class PlayersAtTheTable
       @players[player_who_submitted_big_blind_index]
    end
    
-   # (see GameCore#player_whose_turn_is_next)
-   def player_whose_turn_is_next      
-      @players[player_whose_turn_is_next_index]
-   end
-   
-   # @return The +Player+ who acted last.
-   # @raise (see #player_who_acted_last_index)
-   def player_who_acted_last
-      @players[player_who_acted_last_index]
-   end
-   
    # (see GameCore#player_with_the_dealer_button)
    def player_with_the_dealer_button      
       @players.each { |player| return player if dealer_position_relative_to_dealer == player.position_relative_to_dealer }
-   end   
-   
-   def user_player
-      @players.each do |player|
-         return player if player.position_relative_to_user == player_position_relative_to_self(number_of_players)
-      end
    end
-   
-   # @return [Array<Player>] The players who are active.
-   def active_players
-      @players.select { |player| player.is_active? }
-   end
-   
-   #@return [Array<Player>] The players who have not folded.
-   def non_folded_players
-      @players.select { |player| !player.folded? }
-   end
-   
-   def list_of_opponent_players
-      local_list_of_players = @players.dup
-      local_list_of_players.delete_at USERS_INDEX
-      local_list_of_players
-   end
-   
-   # return [Array] The list of players that have not yet folded.
-   def list_of_players_who_have_not_folded
-      @players.reject { |player| player.has_folded }
-   end
-   
-   # return [Array] The list of players who have folded.
-   def list_of_players_who_have_folded
-      @players.select { |player| player.has_folded }
-   end 
    
    # Methods for retrieving the indices of particular players
    
@@ -133,50 +286,7 @@ class PlayersAtTheTable
       @players.index { |player| player.position_relative_to_dealer == position_relative_to_dealer_next_to_act }
    end
    
-   # @raise MatchStateString::NoActionsHaveBeenTaken if no actions have been
-   #  taken.
-   def player_who_acted_last_index
-      raise MatchStateString::NoActionsHaveBeenTaken unless @position_relative_to_dealer_acted_last
-      @players.index { |player| player.position_relative_to_dealer == @position_relative_to_dealer_acted_last }
-   end
-   
    # Player position reference information
-   
-   # @return [Integer] The position relative to the dealer that is next to act.
-   # @todo I think this will not work outside of two player.
-   def position_relative_to_dealer_next_to_act      
-      (first_player_position_in_current_round - 1 + @match_state_string.number_of_actions_in_current_round) % active_players.length
-   end
-   
-   # @todo Move to GameDefinition
-   # @return [Integer] The user's position relative to the user.
-   def users_position_relative_to_user
-      @game_definition.number_of_players - 1
-   end
-   
-   # @todo Move to GameDefinition
-   # @return [Integer] The dealer's position relative to the dealer.
-   def dealer_position_relative_to_dealer
-      @game_definition.number_of_players - 1
-   end
-   
-   # @todo Move to MatchStateString (it should know how many players are in
-   #  this match, but I don't remember if it does yet.)
-   # @param [Integer] seat A seat at the table.
-   # @return [Integer] The position relative to the dealer of the given +seat+.
-   def position_relative_to_dealer(seat)
-      (@match_state_string.position_relative_to_dealer + seat) % @game_definition.number_of_players
-   end
-   
-   # @return [Integer] The first player position relative to the dealer in the current round.
-   def first_player_position_in_current_round
-      @game_definition.first_player_position_in_each_round[@match_state_string.round]
-   end
-   
-   # @see MatchStateString#position_relative_to_dealer
-   def users_position
-      @match_state_string.position_relative_to_dealer
-   end
    
    def amounts_to_call
       @players.inject({}) do |hash, player|
@@ -210,24 +320,6 @@ class PlayersAtTheTable
    
    def last_round?
       @game_definition.number_of_rounds - 1 == @match_state_string.round 
-   end
-   
-   # @return [Boolean] +true+ if the hand has ended, +false+ otherwise.
-   def hand_ended?
-      less_than_two_non_folded_players? || reached_showdown?
-   end
-   
-   def less_than_two_non_folded_players?   
-      non_folded_players.length < 2
-   end
-   
-   def reached_showdown?
-      opponents_cards_visible?
-   end
-   
-   # @return [Boolean] +true+ if any opponents cards are visible, +false+ otherwise.
-   def opponents_cards_visible?
-      are_visible = (@match_state_string.list_of_opponents_hole_cards.length > 0 && !@match_state_string.list_of_opponents_hole_cards[0].empty?)
    end
    
    # Player chip information
@@ -264,57 +356,5 @@ class PlayersAtTheTable
          string += '/' unless i == @match_state_string.round
       end
       string
-   end
-
-   def start_new_hand!
-      @player_acting_sequence = [[]]
-      
-      @players.each_index do |i|
-         player = @players[i]
-         
-         player.start_new_hand! position_relative_to_dealer(player.seat),
-            ChipStack.new(@game_definition.list_of_player_stacks[i]), # @todo if @is_doyles_game
-            lambda{if user_player.equals?(player)
-                     @match_state_string.users_hole_cards
-                  else
-                     Hand.new
-                  end}.call
-      end
-   end
-   
-   def assign_hole_cards_to_opponents!
-      list_of_opponent_players.each do |opponent|
-         opponent.hole_cards = @match_state_string.list_of_hole_card_hands[opponent.position_relative_to_dealer] unless opponent.has_folded
-      end
-   end
-   
-   def update_state_of_players!
-      #last_player_to_act = @players[player_who_acted_last_index]
-      
-      if @last_round != @match_state_string.round
-         reset_actions_taken_in_current_round!
-      else
-         player_who_acted_last.actions_taken_in_current_round << @match_state_string.last_action
-      end
-
-      acpc_action = @match_state_string.last_action.to_acpc_character
-      if 'c' == acpc_action || 'k' == acpc_action
-         @pot.take_call! player_who_acted_last
-      elsif 'f' == acpc_action
-         player_who_acted_last.has_folded = true
-      elsif 'r' == acpc_action || 'b' == acpc_action
-         amount_put_in_pot_after_calling = @pot.players_involved_and_their_amounts_contributed[last_player_to_act].sum + @pot.amount_to_call(last_player_to_act)
-         amount_to_raise_to = if @match_state_string.last_action.modifier
-            @match_state_string.last_action.modifier
-         else
-            @minimum_wager + amount_put_in_pot_after_calling
-         end
-         @pot.take_raise! player_who_acted_last, amount_to_raise_to
-         @minimum_wager = amount_to_raise_to - amount_put_in_pot_after_calling
-      else
-         raise PokerAction::IllegalPokerAction, acpc_action
-      end
-      
-      assign_hole_cards_to_opponents! if hand_ended?
    end
 end

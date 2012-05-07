@@ -102,7 +102,7 @@ class MatchState
    
    # @return [Array<Player>] The players who are active.
    def active_players
-      @players.select { |player| player.is_active? }
+      @players.select { |player| player.active? }
    end
    
    #@return [Array<Player>] The players who have not folded.
