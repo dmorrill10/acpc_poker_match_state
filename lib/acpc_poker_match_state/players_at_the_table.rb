@@ -199,13 +199,24 @@ class PlayersAtTheTable
       
       @players.each_index do |i|
          player = @players[i]
-         
-         player.start_new_hand! @initial_stacks[i], # @todo if @is_doyles_game
-            lambda{if user_player.equals?(player)
-                     match_state_string.users_hole_cards
-                  else
-                     Hand.new
-                  end}.call
+
+         player.start_new_hand!(
+            lambda do
+               if @blinds[position_relative_to_dealer(player)]
+                  @blinds[position_relative_to_dealer(player)]
+               else
+                  0
+               end
+            end.call,
+            @initial_stacks[i], # @todo if @is_doyles_game
+            lambda do
+               if user_player.equals?(player)
+                  match_state_string.users_hole_cards
+               else
+                  Hand.new
+               end
+            end.call
+         )
       end
    end
    
