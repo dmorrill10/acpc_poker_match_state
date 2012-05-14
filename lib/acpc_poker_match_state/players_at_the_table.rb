@@ -1,6 +1,7 @@
 
 # Local modules
 require File.expand_path('../acpc_poker_match_state_defs', __FILE__)
+require File.expand_path('../match_state_transition', __FILE__)
 
 # Gems
 require 'acpc_poker_types'
@@ -47,6 +48,8 @@ class PlayersAtTheTable
       end
       
       @initial_stacks = @players.map { |player| player.chip_stack }
+      
+      @transition = MatchStateTransition.new
    end
    
    # @return [Integer] The number of players seated at the table.
@@ -54,7 +57,7 @@ class PlayersAtTheTable
    
    # @param [MatchStateString] match_state_string The next match state.
    def update!(match_state_string)
-      @users_position_relative_to_dealer = match_state_string.position_relative_to_dealer
+      @transition.next_state = match_state_string
       
       if match_state_string.first_state_of_first_round?
          start_new_hand! match_state_string
@@ -91,6 +94,10 @@ class PlayersAtTheTable
    
    private
    
+   def users_position_relative_to_dealer
+      @transition.last_state.position_relative_to_dealer
+   end
+   
    # @param [Integer] player The player of which the position relative to the
    #  dealer is desired.
    # @return [Integer] The position relative to the user of the given player,
@@ -114,7 +121,7 @@ class PlayersAtTheTable
    # @raise (see Integer#position_relative_to)
    def position_relative_to_dealer(player)
       seat_of_dealer = @users_seat.seat_from_relative_position(
-         @users_position_relative_to_dealer, number_of_players)
+         users_position_relative_to_dealer, number_of_players)
       
       player.seat.position_relative_to seat_of_dealer, number_of_players
    end
