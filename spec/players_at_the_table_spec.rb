@@ -220,12 +220,46 @@ describe PlayersAtTheTable do
          end
          describe 'in two player' do
             describe 'limit' do
-               describe 'when both players always call' do
-                  it 'after one round' do
-                     check_always_call_first_round_works_in_two_player_limit { |example| }
-                  end
-                  it 'after an entire hand with four rounds' do
-                     pending
+               it 'after a non-terminal sequence of four actions' do
+                  check_non_terminal_four_action_sequence { |example| }
+               end
+               describe 'after a terminal sequence of five actions the sequence' do
+                  it 'where the second player calls' do
+                     check_non_terminal_four_action_sequence do |prev_example|
+                     
+                        match_state = prev_example.given.match_state_string
+                        players = prev_example.then.players
+                        player_acting_sequence = prev_example.then.player_acting_sequence
+                        
+                        player_who_acted_last = prev_example.then.next_player_to_act
+                        index_of_player_who_acted_last = players.index(player_who_acted_last)
+                        
+                        local_index_of_next_player_to_act = index_of_next_player_to_act(
+                           @initial_example.given.first_positions_relative_to_dealer[match_state.round],
+                           2, players.length
+                        )
+                        next_player_to_act = players[local_index_of_next_player_to_act]
+                        
+                        player_acting_sequence.last << index_of_player_who_acted_last
+                        
+                        setup_actions_taken_in_current_hand! players, index_of_player_who_acted_last,
+                           match_state.round, match_state.last_action
+                        
+                        match_state.stubs(:list_of_hole_card_hands).returns(@hands)
+                        
+                        # Cause a showdown
+                        
+                        users_seat = match_state.position_relative_to_dealer
+                        @hands.each_index do |i|
+                           @hands[i].stubs(:empty?).returns(false)
+                           
+                           players[i].expects(:assign_cards!).with(@hands[i]) unless i == users_seat
+                        end
+                        
+                        prev_example = create_and_check_update_example match_state,
+                           players, player_acting_sequence, next_player_to_act,
+                           player_who_acted_last
+                     end
                   end
                end
             end
@@ -233,56 +267,119 @@ describe PlayersAtTheTable do
       end
    end
 
-   def check_always_call_first_round_works_in_two_player_limit
+   def check_non_terminal_four_action_sequence
       player_list = init_two_player_list
       
       check_various_valid_initial_update_configurations(player_list) do |prev_example|
-         action = init_vanilla_action
-         action.stubs(:to_acpc_character).returns(PokerAction::LEGAL_ACTIONS[:call])
          
+         init_actions_taken_in_current_round player_list.length
+         
+         prev_example = check_initial_call! prev_example
+         
+         ###### Next turn, and next round
+         action = prev_example.given.match_state_string.last_action
+         player_acting_sequence = prev_example.then.player_acting_sequence
+         
+         # Update the round
          match_state = prev_example.given.match_state_string
-         match_state.stubs(:last_action).returns(action)
-         match_state.stubs(:first_state_of_first_round?).returns(false)
-         match_state.stubs(:in_new_round?).with(match_state.round).returns(false)
+         last_round = match_state.round
+         match_state.stubs(:round).returns(1)
+         match_state.stubs(:in_new_round?).with(last_round).returns(true)
          
+         # Setup player who acted and will act next turn
          players = prev_example.then.players
-         players.each_index do |i|
-            player = players[i]
-            
-            player.stubs(:active?).returns(true)
-            player.stubs(:folded?).returns(false)
-            player.stubs(:hole_cards).returns(@hands[i])
+         
+         players.each do |player|
+            player.expects(:start_next_round!)
          end
          
          player_who_acted_last = prev_example.then.next_player_to_act
          index_of_player_who_acted_last = players.index(player_who_acted_last)
          
-         player_acting_sequence = [[index_of_player_who_acted_last]]
+         local_index_of_next_player_to_act = @initial_example.given.first_positions_relative_to_dealer[match_state.round]
+         next_player_to_act = players[local_index_of_next_player_to_act]
          
-         actions_taken_in_current_hand = [].fill [[]], 0..(players.length-1)
-         actions_taken_in_current_hand[index_of_player_who_acted_last][match_state.round] << action
+         player_acting_sequence.last << index_of_player_who_acted_last
+         player_acting_sequence << []
          
-         action_appended = states('action_appended').starts_as('no')
-         player_who_acted_last.expects(:take_action!).with(action).then(action_appended.is('yes'))
-         player_who_acted_last.stubs(:actions_taken_in_current_hand).returns(
-            actions_taken_in_current_hand[index_of_player_who_acted_last]
-         ).when(action_appended.is('yes'))
+         # Since this is a new round
+         @actions_taken_in_current_hand.each_index do |i|
+            @actions_taken_in_current_hand[i] << []
+         end
          
-         next_player_to_act = players.find { |player| !player.equals?(player_who_acted_last) }
+         setup_actions_taken_in_current_hand! players, index_of_player_who_acted_last,
+            last_round, action
          
-         example = update_example match_state, players, player_acting_sequence,
+         prev_example = create_and_check_update_example match_state, players, player_acting_sequence,
             next_player_to_act, player_who_acted_last
          
-         @patient.update! example.given.match_state_string
+         ####### Next turn
          
-         # Actions: c
-         check_patient example.then
+         match_state = prev_example.given.match_state_string
+         match_state.stubs(:last_action).returns(action)
+         match_state.stubs(:round).returns(1)
+         match_state.stubs(:in_new_round?).with(match_state.round).returns(false)
          
-         # Actions: cc
-         pending 'time'
+         # Setup player who acted and will act next turn
+         players = prev_example.then.players
          
-         yield example         
+         player_who_acted_last = prev_example.then.next_player_to_act
+         index_of_player_who_acted_last = players.index(player_who_acted_last)
+         
+         local_index_of_next_player_to_act = index_of_next_player_to_act(
+            @initial_example.given.first_positions_relative_to_dealer[match_state.round],
+            1, players.length
+         )
+         next_player_to_act = players[local_index_of_next_player_to_act]
+         
+         player_acting_sequence.last << index_of_player_who_acted_last         
+         
+         setup_actions_taken_in_current_hand! players, index_of_player_who_acted_last,
+            match_state.round, action
+         
+         # Check result. Actions taken so far should be: cc/r
+         prev_example = create_and_check_update_example match_state, players, player_acting_sequence,
+            next_player_to_act, player_who_acted_last
+         
+         yield prev_example         
       end
+   end
+   def check_initial_call!(prev_example)         
+      action = init_vanilla_action
+      
+      # Setup match state
+      match_state = prev_example.given.match_state_string
+      match_state.stubs(:last_action).returns(action)
+      match_state.stubs(:first_state_of_first_round?).returns(false)
+      match_state.stubs(:in_new_round?).with(match_state.round).returns(false)
+      
+      # Ensure players are active and have cards
+      players = prev_example.then.players
+      players.each_index do |i|
+         player = players[i]
+         
+         player.stubs(:active?).returns(true)
+         player.stubs(:folded?).returns(false)
+         player.stubs(:hole_cards).returns(@hands[i])
+      end
+      
+      # Setup player who acted and will act next turn
+      player_who_acted_last = prev_example.then.next_player_to_act
+      index_of_player_who_acted_last = players.index(player_who_acted_last)
+      
+      player_acting_sequence = [[index_of_player_who_acted_last]]
+      
+      setup_actions_taken_in_current_hand! players, index_of_player_who_acted_last,
+         match_state.round, action
+      
+      next_player_to_act = players[index_of_next_player_to_act(
+         @initial_example.given.first_positions_relative_to_dealer[0], 1,
+         players.length
+      )]
+      
+      # Check result. Actions taken so far should be: c
+      create_and_check_update_example match_state, players,
+         player_acting_sequence, next_player_to_act, player_who_acted_last
    end
    def check_various_valid_initial_update_configurations(player_list, users_seat=0)
       check_various_valid_creation_configurations(player_list,
@@ -332,6 +429,22 @@ describe PlayersAtTheTable do
       check_patient @initial_example.then
          
       yield @initial_example
+   end
+   def index_of_next_player_to_act(first_position_relative_to_dealer_in_current_round,
+                                   number_of_actions_in_current_round, number_of_players)
+      (first_position_relative_to_dealer_in_current_round + number_of_actions_in_current_round) % number_of_players
+   end
+   def create_and_check_update_example(match_state, players, player_acting_sequence, next_player_to_act,
+                                       player_who_acted_last)
+      example = update_example match_state, players, player_acting_sequence,
+         next_player_to_act, player_who_acted_last
+         
+      # Initiate test
+      @patient.update! example.given.match_state_string
+      
+      check_patient example.then
+      
+      example
    end
    def update_example(match_state, expected_players,
                       expected_player_acting_sequence,
@@ -406,6 +519,7 @@ describe PlayersAtTheTable do
    end
    def init_vanilla_action
       action = mock 'PokerAction'
+      action.stubs(:to_acpc_character)
       
       action
    end
@@ -433,6 +547,13 @@ describe PlayersAtTheTable do
       
       player
    end
+   def init_actions_taken_in_current_round(number_of_players)
+      @actions_taken_in_current_hand = []
+      number_of_players.times do |i|
+         player_list = []
+         @actions_taken_in_current_hand << [player_list]
+      end
+   end
    def blinds(number_of_players)
       hash = zero_blinds number_of_players
       hash[0] = SMALL_BET/2
@@ -458,6 +579,28 @@ describe PlayersAtTheTable do
    def first_positions_relative_to_dealer(number_of_rounds)
       [].fill 0, 0..(number_of_rounds - 1)
    end
+   def setup_actions_taken_in_current_hand!(players, index_of_player_who_acted_last,
+                                            round, action)
+      actions_taken_in_current_hand_before_action_is_taken = []
+      @actions_taken_in_current_hand.each_index do |i|
+         actions_taken_in_current_hand_before_action_is_taken << []
+         @actions_taken_in_current_hand[i].each do |current_action|
+            actions_taken_in_current_hand_before_action_is_taken[i] << current_action.dup
+         end
+            
+         players[i].stubs(:actions_taken_in_current_hand).returns(actions_taken_in_current_hand_before_action_is_taken[i])
+      end
+      
+      @actions_taken_in_current_hand[index_of_player_who_acted_last][round] << action
+      
+      action_appended = states('action_appended').starts_as('no')
+      players[index_of_player_who_acted_last].expects(:take_action!).with(action).then(action_appended.is('yes'))
+      players.each_index do |i|
+         players[i].stubs(:actions_taken_in_current_hand).returns(
+            @actions_taken_in_current_hand[i]
+         ).when(action_appended.is('yes'))
+      end
+   end
    def check_patient(then_values)
       @patient.players.should == then_values.players
       @patient.round.should == then_values.round
@@ -466,113 +609,6 @@ describe PlayersAtTheTable do
       @patient.player_who_acted_last.should == then_values.player_who_acted_last
       @patient.next_player_to_act.should == then_values.next_player_to_act
    end
-   
-   
-   
-   def always_call_state_sequence(number_of_rounds, player_list)
-      
-      
-      # @todo Refactor this block ############
-      
-      
-      
-      acting_player_index = (@fprtd[initial_match_state.round] + 0) % player_list.length
-      player_acting_sequence = [[acting_player_index]]
-      
-      
-      
-      
-      initial_match_state = initial_round_vanilla_match_state_with_action initial_match_state
-      yield initial_match_state, player_acting_sequence
-      
-      # @todo Refactor this block ############
-      
-      
-      
-      
-      sequence_of_vanilla_match_states_over_rounds(initial_match_state,
-                                                   number_of_rounds,
-                                                   player_list) do |match_state|
-         player_acting_sequence << []
-         
-         unless 0 == match_state.round
-            each_player_actions_taken_in_current_hand.each do |action_list|
-               action_list << []
-            end
-            player_list.each { |player| player.expects(:start_next_round!) }
-         end
-         
-         states_per_round = player_list.length
-         states_per_round.times do |state_number|
-            
-            match_state.stubs(:last_action).returns(action)
-            
-            acting_player_index = (@fprtd[match_state.round] + state_number) % player_list.length
-            
-            player_acting_sequence.last << acting_player_index
-            
-            puts "acting_player_index: #{acting_player_index}"
-            
-            action_appended = states('action_appended').starts_as('no')
-            
-            actions_before = []
-            each_player_actions_taken_in_current_hand[acting_player_index].each do |elem|
-               actions_before << elem.dup
-            end            
-            player_list[acting_player_index].stubs(:actions_taken_in_current_hand).returns(actions_before).when(action_appended.is('no'))
-            
-            each_player_actions_taken_in_current_hand[acting_player_index].last << action
-            
-            puts "each_player_actions_taken_in_current_hand before: #{actions_before}"
-            puts "each_player_actions_taken_in_current_hand after: #{each_player_actions_taken_in_current_hand}"
-            
-            player_list[acting_player_index].expects(:take_action!).with(action).then(action_appended.is('yes'))
-            player_list[acting_player_index].stubs(:actions_taken_in_current_hand).returns(each_player_actions_taken_in_current_hand[acting_player_index]).when(action_appended.is('yes'))
-            
-            player_list.each do |player|
-               player.stubs(:active?).returns(true)
-               player.stubs(:folded?).returns(false)
-            end
-            
-            yield match_state, player_acting_sequence
-         end
-      end
-   end
-   def opponents_from_players(players)
-      opponents = []
-      players.each_index do |i|
-         opponents << player_list[i] unless USERS_SEAT == i
-      end
-      opponents
-   end
-   def sequence_of_vanilla_match_states_over_rounds(initial_match_state,
-                                                    number_of_rounds,
-                                                    player_list)      
-      (number_of_rounds-1).times do |round|
-         initial_match_state.stubs(:round).returns(round+1)
-         initial_match_state.stubs(:in_new_round?).with(round+1).returns(false)
-         initial_match_state.stubs(:in_new_round?).with(round).returns(true)
-         
-         yield initial_match_state
-      end
-   end
-   def initial_round_vanilla_match_state_with_action(previous_match_state)
-      previous_match_state.stubs(:first_state_of_first_round?).returns(false)
-      previous_match_state.stubs(:round).returns(0)
-      previous_match_state.stubs(:in_new_round?).with(0).returns(false)
-      
-      previous_match_state
-   end
-   
-   
-   
-   
-   
-   
-   
-   
-   
-      
    
    # @todo Move to MatchState #######
    
