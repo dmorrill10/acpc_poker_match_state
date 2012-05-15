@@ -39,9 +39,10 @@ describe PlayersAtTheTable do
                      player_list.last.stubs(:seat).returns(0)
                      
                      expect do
-                     PlayersAtTheTable.seat_players(
-                        player_list, 0, first_positions_relative_to_dealer(1),
-                        blinds(player_list.length))
+                        PlayersAtTheTable.seat_players(
+                           player_list, 0, first_positions_relative_to_dealer(1),
+                           blinds(player_list.length)
+                        )
                      end.to raise_exception(PlayersAtTheTable::MultiplePlayersHaveTheSameSeat)
                   end
                end

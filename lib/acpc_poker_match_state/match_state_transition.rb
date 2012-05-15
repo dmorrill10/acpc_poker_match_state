@@ -7,22 +7,32 @@ require 'acpc_poker_types'
 
 class MatchStateTransition
 
-   attr_accessor :next_state
+   exceptions :no_state_given
+
+   attr_reader :next_state
    
    attr_reader :last_state
+   
+   def next_state!(new_state)
+      @next_state = new_state
       
-   # @param [Integer] last_round The round in which the last action was taken.
-   # @return [Boolean] +true+ if the current round is a later round than the
-   #  round in which the last action was taken, +false+ otherwise.
+      yield
+      
+      @last_state = @next_state
+   end
+   
+   # @return [Boolean] +true+ if the next state's round is different from the
+   #  last, +false+ otherwise.
    def new_round?
-      initial_round? || @next_state.round > @last_state.round
+      raise NoStateGiven unless @next_state
+      return true unless @last_state
+      
+      @next_state.round != @last_state.round
    end
    
    def initial_round?
-      @last_state.first_state_of_first_round?
-   end
-   
-   def complete_transition!
-      @last_state = @next_state
+      raise NoStateGiven unless @next_state
+      
+      @next_state.first_state_of_first_round?
    end
 end
