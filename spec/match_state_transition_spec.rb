@@ -160,10 +160,10 @@ describe MatchStateTransition do
          end
       end
    end
-   describe '#initial_round?' do
+   describe '#initial_state?' do
       it 'raises an exception if it is called before #next_state!' do
          expect do
-            @patient.initial_round?
+            @patient.initial_state?
          end.to raise_exception(MatchStateTransition::NoStateGiven)
       end
       describe 'reports true when given a state that reports it is the first ' +
@@ -174,7 +174,7 @@ describe MatchStateTransition do
             new_state.stubs(:first_state_of_first_round?).returns(true)
    
             @patient.next_state! new_state do
-               @patient.initial_round?.should == true
+               @patient.initial_state?.should == true
             end
          end
          it 'after transition' do
@@ -183,7 +183,7 @@ describe MatchStateTransition do
             
             @patient.next_state!(new_state) {}
             
-            @patient.initial_round?.should == true
+            @patient.initial_state?.should == true
          end
       end
       describe 'reports false when given a state that reports it is not the ' +
@@ -194,7 +194,7 @@ describe MatchStateTransition do
             new_state.stubs(:first_state_of_first_round?).returns(false)
    
             @patient.next_state! new_state do
-               @patient.initial_round?.should == false
+               @patient.initial_state?.should == false
             end
          end
          it 'after transition' do
@@ -203,7 +203,7 @@ describe MatchStateTransition do
             
             @patient.next_state!(new_state) {}
             
-            @patient.initial_round?.should == false
+            @patient.initial_state?.should == false
          end
       end
    end

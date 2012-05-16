@@ -265,8 +265,9 @@ describe PlayersAtTheTable do
       # Setup match state
       match_state = prev_example.given.match_state_string
       match_state.stubs(:last_action).returns(action)
-      match_state.stubs(:first_state_of_first_round?).returns(false)
       match_state.stubs(:in_new_round?).with(match_state.round).returns(false)
+      match_state.stubs(:number_of_actions_this_round).returns(1)
+      match_state.stubs(:number_of_actions_this_hand).returns(1)
       
       # Ensure players are active and have cards
       players = prev_example.then.players
@@ -410,6 +411,8 @@ describe PlayersAtTheTable do
    def initial_vanilla_match_state(player_list, users_seat=0)
       match_state = mock 'MatchStateString'
       
+      match_state.stubs(:number_of_actions_this_round).returns(0)
+      match_state.stubs(:number_of_actions_this_hand).returns(0)
       match_state.stubs(:first_state_of_first_round?).returns(true)
       match_state.stubs(:position_relative_to_dealer).returns(users_seat)
       match_state.stubs(:round).returns(0)
@@ -518,7 +521,6 @@ describe PlayersAtTheTable do
    end
    def check_patient(then_values)
       @patient.players.should == then_values.players
-      @patient.round.should == then_values.round
       @patient.player_acting_sequence.should == then_values.player_acting_sequence
       @patient.number_of_players.should == then_values.number_of_players
       @patient.player_who_acted_last.should == then_values.player_who_acted_last

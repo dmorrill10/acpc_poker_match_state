@@ -30,7 +30,7 @@ class MatchStateTransition
       @next_state.round != @last_state.round
    end
    
-   def initial_round?
+   def initial_state?
       raise NoStateGiven unless @next_state
       
       @next_state.first_state_of_first_round?

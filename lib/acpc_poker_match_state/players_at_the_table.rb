@@ -19,11 +19,10 @@ class PlayersAtTheTable
    
    attr_reader :players
    
-   # @return [Integer, NilClass] The current round, if a match state has been seen, otherwise +nil+.
-   attr_reader :round
-   
    # @return [Array<Array<Integer>>] The sequence of seats that acted, separated by round, or +nil+ if no actions have been taken.
    attr_reader :player_acting_sequence
+   
+   attr_reader :transition
    
    alias_new :seat_players
    
@@ -57,34 +56,31 @@ class PlayersAtTheTable
    
    # @param [MatchStateString] match_state_string The next match state.
    def update!(match_state_string)
-      @users_position_relative_to_dealer = match_state_string.position_relative_to_dealer
-      
-      if match_state_string.first_state_of_first_round?
-         start_new_hand! match_state_string
-         @round = match_state_string.round
-         return
-      end
+      @transition.next_state! match_state_string do
+         # @todo
+         @users_position_relative_to_dealer = @transition.next_state.position_relative_to_dealer
          
-      update_state_of_players! match_state_string
-      
-      prev_round = @round
-      @round = match_state_string.round
-      @player_acting_sequence.last << player_who_acted_last.seat
-      @player_acting_sequence << [] if match_state_string.in_new_round?(prev_round)
+         return start_new_hand! if @transition.initial_state?
+         
+         update_state_of_players!
+         
+         @player_acting_sequence.last << player_who_acted_last.seat
+         @player_acting_sequence << [] if @transition.in_new_round?
+      end
    end
    
    # @return [Player] The player who acted last.
    def player_who_acted_last
-      return nil unless round && number_of_actions_in_current_hand > 0
+      return nil unless @transition.last_state && @transition.last_state.number_of_actions_this_hand > 0
       
-      player_to_act_after_n_actions number_of_actions_in_current_round - 1
+      player_to_act_after_n_actions @transition.last_state.number_of_actions_this_round, @transition.last_state.round
    end
    
    # @return [Player] The player who is next to act.
    def next_player_to_act
-      return nil unless @round
+      return nil unless @transition.next_state
       
-      p1 = player_to_act_after_n_actions number_of_actions_in_current_round
+      p1 = player_to_act_after_n_actions @transition.next_state.number_of_actions_this_round
       
       
       #puts "next_player_to_act: #{active_players.index(p1)}"
@@ -164,17 +160,18 @@ class PlayersAtTheTable
    end
    
    # @param [Integer] n A number of actions.
+   # @param [Integer] round The round in which the actions were taken.
    # @return [Player] The player who is next to act after +n+ actions.
    # @raise InsufficientFirstPositionsProvided
    # @raise NoActionsHaveBeenTaken
-   def player_to_act_after_n_actions(n)
+   def player_to_act_after_n_actions(n, round=@transition.next_state.round)
       
 #      puts "@first_positions_relative_to_dealer: #{@first_positions_relative_to_dealer}, n: #{n}"
       
       begin
-         position_relative_to_dealer_to_act = (@first_positions_relative_to_dealer[@round] + n) % number_of_players
+         position_relative_to_dealer_to_act = (@first_positions_relative_to_dealer[round] + n) % number_of_players
       rescue
-         raise InsufficientFirstPositionsProvided, @round - (@first_positions_relative_to_dealer.length - 1)
+         raise InsufficientFirstPositionsProvided, round - (@first_positions_relative_to_dealer.length - 1)
       end
       
       player_to_act = active_players.find { |player| position_relative_to_dealer(player) >= position_relative_to_dealer_to_act }
@@ -184,30 +181,7 @@ class PlayersAtTheTable
       player_to_act
    end
    
-   def number_of_actions_in_current_hand
-      # @todo move calculations into Player
-      @players.inject(0) do |sum, player|
-         sum += player.actions_taken_in_current_hand.inject(0) do |round_sum, action_list|
-            round_sum += action_list.length
-         end
-      end
-   end
-   
-   def number_of_actions_in_current_round
-      # @todo move calculations into Player
-      @players.inject(0) do |sum, player|
-         
-         #puts "round: #{@round}, player.seat: #{player.seat}, actions_taken_in_current_hand: #{player.actions_taken_in_current_hand}"
-         
-         sum += player.actions_taken_in_current_hand[@round].length
-         
-         #puts "sum: #{sum} round: #{@round}, player.seat: #{player.seat}, actions_taken_in_current_hand: #{player.actions_taken_in_current_hand}"
-         
-         sum
-      end
-   end
-   
-   def start_new_hand!(match_state_string)
+   def start_new_hand!
       @player_acting_sequence = [[]]
       
       @players.each_index do |i|
@@ -224,7 +198,7 @@ class PlayersAtTheTable
             @initial_stacks[i], # @todo if @is_doyles_game
             lambda do
                if user_player.equals?(player)
-                  match_state_string.users_hole_cards
+                  @transition.next_state.users_hole_cards
                else
                   Hand.new
                end
@@ -233,20 +207,20 @@ class PlayersAtTheTable
       end
    end
    
-   def assign_hole_cards_to_opponents!(match_state_string)
+   def assign_hole_cards_to_opponents!
       opponents.each do |opponent|
          unless opponent.folded?
-            opponent.assign_cards! match_state_string.list_of_hole_card_hands[position_relative_to_dealer(opponent)]
+            opponent.assign_cards! @transition.next_state.list_of_hole_card_hands[position_relative_to_dealer(opponent)]
          end
       end
    end
    
-   def update_state_of_players!(match_state_string)      
-      next_player_to_act.take_action! match_state_string.last_action
+   def update_state_of_players!
+      next_player_to_act.take_action! @transition.next_state.last_action
       
       if hand_ended?
-         assign_hole_cards_to_opponents!(match_state_string)
-      elsif @round != match_state_string.round
+         assign_hole_cards_to_opponents!
+      elsif @transition.new_round?
          @players.each { |player| player.start_next_round! }
       end
    end
