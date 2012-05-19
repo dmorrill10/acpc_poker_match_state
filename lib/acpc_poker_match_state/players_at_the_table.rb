@@ -282,7 +282,7 @@ class PlayersAtTheTable
    def player_with_the_dealer_button      
       @players.each { |player| return player if dealer_position_relative_to_dealer == player.position_relative_to_dealer }
    end
-   
+
    # Methods for retrieving the indices of particular players
    
    def player_with_the_dealer_button_index

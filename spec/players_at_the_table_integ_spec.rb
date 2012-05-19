@@ -1,6 +1,8 @@
 
 require File.expand_path('../support/spec_helper', __FILE__)
 
+require 'acpc_poker_types'
+
 require File.expand_path('../../lib/acpc_poker_match_state/players_at_the_table', __FILE__)
 
 describe PlayersAtTheTable do
@@ -8,119 +10,6 @@ describe PlayersAtTheTable do
    INITIAL_STACK_SIZE = 2000
    SMALL_BET = 100
    
-   describe '::seat_players' do
-      describe 'raises an exception if it is given' do
-         describe 'a player list' do
-            it 'that is empty' do
-               expect do
-                  PlayersAtTheTable.seat_players(
-                     [], 0, first_positions_relative_to_dealer(1), blinds(0))
-               end.to raise_exception(PlayersAtTheTable::NoPlayersToSeat)
-            end
-            describe 'where at least one player' do
-               it 'has already acted' do
-                  various_numbers_of_players do |number_of_players|
-                     player_list = init_vanilla_player_list(number_of_players)
-                     
-                     player_list[0].stubs(:actions_taken_in_current_hand).returns([[mock('Action')]])
-                     expect do
-                        PlayersAtTheTable.seat_players(
-                           player_list, 0, first_positions_relative_to_dealer(1),
-                           blinds(player_list.length))
-                     end.to raise_exception(PlayersAtTheTable::PlayerActedBeforeSittingAtTable)
-                  end
-               end
-               it 'has the same seat as another' do
-                  various_numbers_of_players do |number_of_players|
-                     player_list = init_vanilla_player_list(number_of_players)
-                     
-                     next if player_list.length < 2
-                     
-                     player_list.last.stubs(:seat).returns(0)
-                     
-                     expect do
-                        PlayersAtTheTable.seat_players(
-                           player_list, 0, first_positions_relative_to_dealer(1),
-                           blinds(player_list.length)
-                        )
-                     end.to raise_exception(PlayersAtTheTable::MultiplePlayersHaveTheSameSeat)
-                  end
-               end
-            end
-         end
-         describe 'a user seat' do
-            it 'that is out of bounds' do
-               [-1, 2].each do |out_of_bounds_seat|
-                  player_list = init_two_player_list
-                  expect do
-                     PlayersAtTheTable.seat_players(
-                        player_list, out_of_bounds_seat,
-                        first_positions_relative_to_dealer(1),
-                        blinds(player_list.length))
-                  end.to raise_exception(PlayersAtTheTable::UsersSeatOutOfBounds)
-               end
-               player_list = init_two_player_list
-               # Increment each player's seat in order to make sure no player is in seat zero
-               player_list.map do |player|
-                  old_seat = player.seat
-                  player.stubs(:seat).returns(old_seat + 1)
-               end
-                  
-               expect do
-                  PlayersAtTheTable.seat_players(
-                     player_list, 0, first_positions_relative_to_dealer(1),
-                     blinds(player_list.length))
-               end.to raise_exception(PlayersAtTheTable::UsersSeatOutOfBounds)
-            end
-         end
-         describe 'a list of first positions relative to the dealer' do
-            it 'that is empty' do
-               various_numbers_of_players do |number_of_players|
-                  player_list = init_vanilla_player_list(number_of_players)
-                  
-                  expect do
-                     PlayersAtTheTable.seat_players(player_list, 0, [],
-                                                    blinds(player_list.length))
-                  end.to raise_exception(PlayersAtTheTable::InsufficientFirstPositionsProvided)
-               end
-            end
-            it 'where a position is out of bounds' do
-               various_numbers_of_players do |number_of_players|
-                  player_list = init_vanilla_player_list(number_of_players)
-                  
-                  expect do
-                     PlayersAtTheTable.seat_players(player_list, 0,
-                                                    [player_list.length],
-                                                    blinds(player_list.length))
-                  end.to raise_exception(PlayersAtTheTable::FirstPositionOutOfBounds)
-               end
-            end
-         end
-         describe 'blinds' do
-            it 'where a blind position is out of bounds' do
-               various_numbers_of_players do |number_of_players|
-                  player_list = init_vanilla_player_list(number_of_players)
-                  
-                  expect do
-                     PlayersAtTheTable.seat_players(
-                        player_list, 0, first_positions_relative_to_dealer(1),
-                           {player_list.length => 100})
-                  end.to raise_exception(PlayersAtTheTable::BlindPositionOutOfBounds)
-               end
-            end
-         end
-      end
-      it 'works properly' do
-         various_numbers_of_players do |number_of_players|
-            player_list = init_vanilla_player_list(number_of_players)
-            
-            player_list.length.times do |users_seat|
-               check_various_valid_creation_configurations(player_list,
-                                                           users_seat) { |example| }
-            end
-         end
-      end
-   end
    describe '#update!' do
       describe 'keeps track of player positions and stacks' do
          it 'after the initial state, before any actions' do
@@ -310,13 +199,13 @@ describe PlayersAtTheTable do
             prev_example.given.users_seat
          
          opponent_hand = init_vanilla_hand
-         @hands = [].fill opponent_hand, 0..(prev_example.then.number_of_players - 1)
-         Hand.stubs(:new).returns(opponent_hand)
          
          @hands[@initial_example.given.users_seat] = match_state.users_hole_cards
          
+         puts "users hand: #{@hands[@initial_example.given.users_seat]}"
+         
          prev_example.then.players.each_index do |i|
-            player = prev_example.then.players[i]
+            player = prev_example.then.players[i]#
             
             player.stubs(:active?).returns(true)
             
@@ -415,23 +304,27 @@ describe PlayersAtTheTable do
                               :next_player_to_act]})
    end
    def initial_vanilla_match_state(player_list, users_seat=0)
-      match_state = mock 'MatchStateString'
+      hand_number = 0
+      position_relative_to_dealer = users_seat
+      string = "#{AcpcPokerTypesDefs::MATCH_STATE_LABEL}:#{users_seat}:#{hand_number}::"
       
-      match_state.stubs(:number_of_actions_this_round).returns(0)
-      match_state.stubs(:number_of_actions_this_hand).returns(0)
-      match_state.stubs(:first_state_of_first_round?).returns(true)
-      match_state.stubs(:position_relative_to_dealer).returns(users_seat)
-      match_state.stubs(:round).returns(0)
+      @hands = []
+      player_list.each_index do |i|
+         if position_relative_to_dealer == i
+            @hands << arbitrary_hole_card_hand_string
+         else
+            @hands << ''
+         end
+      end
+      string += @hands.join '|'
+      @hands.map! { |hand| Hand.draw_cards hand }
+      
+      match_state = MatchStateString.parse string
       
       player_list.each do |player|
          player.stubs(:equals?).returns(false)
          player.stubs(:equals?).with(player).returns(true)
       end
-      
-      users_hand = init_vanilla_hand
-      users_hand.stubs(:empty?).returns(false)
-      
-      match_state.stubs(:users_hole_cards).returns(users_hand)
       
       match_state
    end
@@ -532,138 +425,10 @@ describe PlayersAtTheTable do
       @patient.player_who_acted_last.should == then_values.player_who_acted_last
       @patient.next_player_to_act.should == then_values.next_player_to_act
    end
-   
-   # @todo Move to MatchState #######
-   
-   #describe '::seat_players' do
-   #   it 'creates players with names and starting stack amounts as given' do
-   #      various_numbers_of_players_names_and_stack_sizes do |player_names_to_stack_map|
-   #         match_state_string_methods_and_return_values =
-   #            {number_of_players: player_names_to_stack_map.keys.length}
-   #         
-   #         init_match_state_string(match_state_string_methods_and_return_values) do |match_state_string|
-   #            player_names_to_stack_map.keys.length.times do |seat|
-   #               # Easy case: the user is always the dealer
-   #               match_state_string.stubs(:position_relative_to_dealer).with(seat).returns(seat)
-   #            end
-   #            patient = PlayersAtTheTable.seat_players player_names_to_stack_map,
-   #               match_state_string
-   #            
-   #            player_names = patient.players.map { |player| player.name }
-   #            player_stacks = patient.players.map { |player| player.chip_stack.to_i }
-   #            
-   #            player_names.should be == player_names_to_stack_map.keys
-   #            player_stacks.should be == player_names_to_stack_map.values
-   #         end
-   #      end
-   #   end
-   #   it 'assigns zero as a stack amount if none is given' do
-   #      pending 'Updates to MatchStateString'
-   #   end
-   #   describe 'raises an exception if' do
-   #      it 'was not given an incorrect number of player names' do
-   #         incorrect_number_of_player_configurations do |player_names_to_stack_map, match_state_string|
-   #            expect{PlayersAtTheTable.seat_players(player_names_to_stack_map, match_state_string)}.to
-   #               raise_exception(PlayersAtTheTable::IncorrectNumberOfPlayerNamesGiven)
-   #         end
-   #      end
-   #   end
-   #end
-   #
-   #def incorrect_number_of_player_configurations
-   #   too_many_player_names do |player_names_to_stack_map, match_state_string|
-   #      yield player_names_to_stack_map, match_state_string
-   #   end
-   #   too_few_player_names do |player_names_to_stack_map, match_state_string| 
-   #      yield player_names_to_stack_map, match_state_string
-   #   end
-   #end
-   #
-   #def too_many_player_names
-   #   various_numbers_of_players_names_and_stack_sizes do |player_names_to_stack_map|
-   #      init_match_state_string({number_of_players: player_names_to_stack_map.keys.length+1}) do |match_state_string|
-   #         yield player_names_to_stack_map, match_state_string
-   #      end
-   #   end
-   #end
-   #
-   #def too_few_player_names
-   #   various_numbers_of_players_names_and_stack_sizes do |player_names_to_stack_map|
-   #      init_match_state_string({number_of_players: player_names_to_stack_map.keys.length-1}) do |match_state_string|
-   #         yield player_names_to_stack_map, match_state_string
-   #      end
-   #   end
-   #end
-   #
-   #def init_match_state_string(stubbed_methods_return_value_map={})
-   #   match_state_string = mock('MatchStateString')
-   #   stubbed_methods_return_value_map.each do |method_to_stub, return_value|
-   #      match_state_string.stubs(method_to_stub).returns(return_value)
-   #   end
-   #   yield match_state_string
-   #end
-   #
-   #def various_numbers_of_players_names_and_stack_sizes
-   #   [{'only_player_0' => 0}, {'only_player_1' => 1},
-   #      {'p1' => 100, 'p2' => 200},
-   #      {'p1' => 10, 'p2' => 10, 'p3' => 100}].each do |player_names_to_stack_map|
-   #      yield player_names_to_stack_map
-   #   end
-   #end
-   
-   #describe 'the list of first seats' do
-         #   it 'is shorter than the round number' do
-         #      lists_of_first_seats_shorter_than_round_number do |list_of_first_seats, match_state|
-         #         expect{MatchStateString.parse(match_state, list_of_first_seats)}.to raise_exception(MatchStateString::UnknownFirstSeat)
-         #      end
-         #   end
-         #   it 'contains a seat that is not occupied by a player' do
-         #      first_seat_in_each_round_with_one_not_occupied do |first_seat_in_each_round, match_state|
-         #         expect{MatchStateString.parse(match_state, first_seat_in_each_round)}.to raise_exception(MatchStateString::FirstSeatIsUnoccupied)
-         #      end
-         #   end
-         #end
-   #it 'reports the correct first player in each round' do
-   #   reports_correct_first_player do |first_seat_in_each_round|
-   #      match_state = MATCH_STATE_LABEL + ':1:1::' + arbitrary_hole_card_hand + '|'
-   #      first_seat_in_each_round.length.times do |i|
-   #         match_state += '/Ah'
-   #         patient = test_match_state_success match_state
-   #         patient.first_player_in_current_round.seat.should == first_seat_in_current_round[i]
-   #      end
-   #   end
-   #end
-   
-    
-   # @todo From MatchStateString
-   #:unknown_first_seat, :first_seat_is_unoccupied
-   #@first_seat_in_each_round = validate_first_seats list_of_first_seats
-   # @param [Array<Integer>] first_player_position_in_each_round The seat of the first player in each round.
-   #
-   #def lists_of_first_seats_shorter_than_round_number
-   #   [[], [0], [0, 1]].each do |list_of_first_seats|
-   #      match_state = MATCH_STATE_LABEL + ':0:0:'
-   #      (list_of_first_seats.length).times do |i|
-   #         match_state += 'c/'
-   #      end
-   #      match_state += ":#{arbitrary_hole_card_hand}|"
-   #      yield list_of_first_seats, match_state   
-   #   end
-   #end
-   #
-   #def first_seat_in_each_round_with_one_not_occupied
-   #   [[-3], [2], [0, 1, 2], [0, 2, 1], [2, 1, 0]].each do |first_seat_in_each_round|
-   #      match_state = MATCH_STATE_LABEL + ':0:0::'
-   #      [first_seat_in_each_round.min.abs-2, first_seat_in_each_round.max-1].max.times do |i|
-   #         match_state += arbitrary_hole_card_hand.to_s + '|'
-   #      end
-   #      yield first_seat_in_each_round, match_state
-   #   end
-   #end
-   #
-   #def reports_correct_first_player
-   #   [[0], [0, 0], [0, 1], [0, 1, 0, 1]].each do |first_seat_in_current_round|
-   #      yield first_seat_in_current_round
-   #   end
-   #end
+   def arbitrary_hole_card_hand_string
+      AcpcPokerTypesDefs::CARD_RANKS[:two] +
+         AcpcPokerTypesDefs::CARD_SUITS[:spades][:acpc_character] +
+         AcpcPokerTypesDefs::CARD_RANKS[:three] +
+         AcpcPokerTypesDefs::CARD_SUITS[:hearts][:acpc_character]
+   end
 end

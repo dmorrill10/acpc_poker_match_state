@@ -1,6 +1,5 @@
-# -*- encoding: utf-8 -*-
 $:.push File.expand_path("../lib", __FILE__)
-require 'version'
+require File.expand_path('../lib/acpc_poker_match_state/version', __FILE__)
 
 Gem::Specification.new do |s|
   s.name        = "acpc_poker_match_state"
