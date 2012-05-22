@@ -1,75 +1,72 @@
 
 require File.expand_path('../support/spec_helper', __FILE__)
 
-require 'acpc_poker_types'
+# Local modules
+require File.expand_path('../../support/dealer_data', __FILE__)
 
 require File.expand_path('../../lib/acpc_poker_match_state/players_at_the_table', __FILE__)
 
 describe PlayersAtTheTable do
+   include DealerData
    
-   INITIAL_STACK_SIZE = 2000
-   SMALL_BET = 100
+   # @todo integrate this into the data where its collected
+   GAME_DEFS = {
+      limit: {
+         stack_size: 400, small_bets: [2, 2, 4, 4],
+         first_positions_relative_to_dealer: [2, 1, 1, 1]
+      },
+      nolimit: {
+         stack_size: 20000, small_bets: [100, 100, 100, 100],
+         first_positions_relative_to_dealer: [2, 1, 1, 1]
+      }
+   }
    
    describe '#update!' do
-      describe 'keeps track of player positions and stacks' do
-         it 'after the initial state, before any actions' do
-            various_numbers_of_players do |number_of_players|
-               number_of_players.times do |users_seat|
-                  player_list = init_vanilla_player_list(number_of_players)
+      it 'keeps track of state for a sequence of match states and actions' do
+         # @todo Move into data retrieval method
+         DealerData::DATA.each do |num_players, data_by_num_players|            
+            ((0..(num_players-1)).map{ |i| (i+1).to_s }).each do |seat|
+               data_by_num_players.each do |type, data_by_type|
+                  turns = data_by_type[:actions]
                   
-                  check_various_valid_initial_update_configurations(player_list,
-                                                                    users_seat) { |example| }
-               end
-            end
-         end
-         describe 'in two player' do
-            describe 'limit' do
-               it 'after a non-terminal sequence of four actions' do
+                  # Setup
+                  stack_size = GAME_DEFS[type][:stack_size]
+                  small_bets = GAME_DEFS[type][:small_bets]
+                  big_blind = small_bets.first
+                  small_blind = big_blind/2
+                  first_positions_relative_to_dealer = GAME_DEFS[type][:first_positions_relative_to_dealer]
+                  users_seat = seat.to_i - 1
                   
-                  pending 'This unit test is too complex to be useful or maintain for now'
+                  #### @todo
+                  #@players
                   
-                  check_non_terminal_four_action_sequence { |example| }
-               end
-               describe 'after a terminal sequence of five actions the sequence' do
-                  it 'where the second player calls' do
+                  @patient = PlayersAtTheTable.seat_players @players, users_seat,
+                     first_positions_relative_to_dealer, [big_blind, small_blind]
+                  
+                  # Sample the dealer match string and action data
+                  number_of_states = 200
+                  number_of_states.times do |i|
+                     turn = turns[i]
                      
-                     pending 'This unit test is too complex to be useful or maintain for now'
+                     from_player_message = turn[:from_players]
                      
-                     check_non_terminal_four_action_sequence do |prev_example|
-                     
-                        match_state = prev_example.given.match_state_string
-                        players = prev_example.then.players
-                        player_acting_sequence = prev_example.then.player_acting_sequence
+                     unless from_player_message.empty?
+                        seat_taking_action = from_player_message.keys.first
                         
-                        player_who_acted_last = prev_example.then.next_player_to_act
-                        index_of_player_who_acted_last = players.index(player_who_acted_last)
+                        @last_action = PokerAction.new from_player_message[seat_taking_action]
                         
-                        local_index_of_next_player_to_act = index_of_next_player_to_act(
-                           @initial_example.given.first_positions_relative_to_dealer[match_state.round],
-                           2, players.length
-                        )
-                        next_player_to_act = players[local_index_of_next_player_to_act]
-                        
-                        player_acting_sequence.last << index_of_player_who_acted_last
-                        
-                        setup_actions_taken_in_current_hand! players, index_of_player_who_acted_last,
-                           match_state.round, match_state.last_action
-                        
-                        match_state.stubs(:list_of_hole_card_hands).returns(@hands)
-                        
-                        # Cause a showdown
-                        
-                        users_seat = match_state.position_relative_to_dealer
-                        @hands.each_index do |i|
-                           @hands[i].stubs(:empty?).returns(false)
-                           
-                           players[i].expects(:assign_cards!).with(@hands[i]) unless i == users_seat
-                        end
-                        
-                        prev_example = create_and_check_update_example match_state,
-                           players, player_acting_sequence, next_player_to_act,
-                           player_who_acted_last
+                        @last_player_to_act = @players[seat_taking_action.to_i - 1]
+                        @last_player_to_act.expects(:take_action!).with(@last_action)
                      end
+                     
+                     match_state_string = turn[:to_players][seat]                  
+                     
+                     @match_state = MatchStateString.parse match_state_string
+                     
+                     @patient.update! @match_state
+                     
+                     #########@todo
+                     #check_patient
                   end
                end
             end
@@ -392,9 +389,6 @@ describe PlayersAtTheTable do
       end
       
       hash
-   end
-   def first_positions_relative_to_dealer(number_of_rounds)
-      [].fill 0, 0..(number_of_rounds - 1)
    end
    def setup_actions_taken_in_current_hand!(players, index_of_player_who_acted_last,
                                             round, action)
