@@ -14,8 +14,7 @@ class PlayersAtTheTable
    exceptions :player_acted_before_sitting_at_table,
       :no_players_to_seat, :users_seat_out_of_bounds,
       :multiple_players_have_the_same_seat, :insufficient_first_positions_provided,
-      :first_position_out_of_bounds, :no_player_to_act_after_n_actions,
-      :blind_position_out_of_bounds
+      :first_position_out_of_bounds, :no_player_to_act_after_n_actions
    
    attr_reader :players
    
@@ -30,10 +29,10 @@ class PlayersAtTheTable
    # @param [Integer] users_seat The user's seat at the table.
    # @param [Array<Integer>] first_positions_relative_to_dealer The first position
    #  relative to the dealer to act in every round.
-   # @param [Hash<Integer, #to_i>] blinds The relation between the position
-   #  relative to the dealer and the blind amount.
+   # @param [Array<#to_i>] blinds The blind amount payed by each player. Indices of this array
+   #  represent the position relative to the dealer of the player paying the blind.
    def initialize(players, users_seat, first_positions_relative_to_dealer,
-                  blinds)
+                  blinds)      
       @players = sanity_check_players players
       
       @first_positions_relative_to_dealer = sanity_check_first_positions first_positions_relative_to_dealer
@@ -49,6 +48,8 @@ class PlayersAtTheTable
       @initial_stacks = @players.map { |player| player.chip_stack }
       
       @transition = MatchStateTransition.new
+      
+      remember_active_players!
    end
    
    # @return [Integer] The number of players seated at the table.
@@ -57,38 +58,49 @@ class PlayersAtTheTable
    # @param [MatchStateString] match_state_string The next match state.
    def update!(match_state_string)
       @transition.next_state! match_state_string do
-         # @todo
+         # @todo retrieve this rather than storing it
          @users_position_relative_to_dealer = @transition.next_state.position_relative_to_dealer
          
-         return start_new_hand! if @transition.initial_state?
+         remember_active_players!
          
-         update_state_of_players!
-         
-         @player_acting_sequence.last << player_who_acted_last.seat
-         @player_acting_sequence << [] if @transition.in_new_round?
+         if @transition.initial_state?
+            start_new_hand!
+         else
+            update_state_of_players!
+            
+            @player_acting_sequence.last << player_who_acted_last.seat
+            @player_acting_sequence << [] if @transition.new_round?
+         end
       end
    end
    
    # @return [Player] The player who acted last.
-   def player_who_acted_last
-      return nil unless @transition.last_state && @transition.last_state.number_of_actions_this_hand > 0
+   def player_who_acted_last(players_who_could_act=@active_players_before_update,
+                             state=@transition.next_state)
+      return nil unless !players_who_could_act.empty? && state && state.number_of_actions_this_hand > 0
       
-      player_to_act_after_n_actions @transition.last_state.number_of_actions_this_round, @transition.last_state.round
+      player_to_act_after_n_actions state.betting_sequence[round_in_which_last_action_taken(state)].length - 1,
+         round_in_which_last_action_taken(state), players_who_could_act
    end
    
-   # @return [Player] The player who is next to act.
-   def next_player_to_act
-      return nil unless @transition.next_state
+   # @return [Player] The next player to act.
+   def next_player_to_act(state=@transition.next_state)
+      return nil unless state && !hand_ended?
       
-      p1 = player_to_act_after_n_actions @transition.next_state.number_of_actions_this_round
-      
-      
-      #puts "next_player_to_act: #{active_players.index(p1)}"
-      
-      p1
+      player_to_act_after_n_actions state.number_of_actions_this_round, state.round
    end
    
    private
+   
+   def remember_active_players!() @active_players_before_update = active_players.dup end
+   
+   def round_in_which_last_action_taken(state)
+      if state.round != 0 && state.number_of_actions_this_round < 1
+         state.round - 1
+      else
+         state.round
+      end
+   end
    
    # @param [Integer] player The player of which the position relative to the
    #  dealer is desired.
@@ -121,7 +133,7 @@ class PlayersAtTheTable
    def sanity_check_players(players)
       raise NoPlayersToSeat if players.empty?
       players.each do |player|
-         if player.actions_taken_in_current_hand.any? do |actions_in_round|
+         if player.actions_taken_in_current_hand && player.actions_taken_in_current_hand.any? do |actions_in_round|
                !actions_in_round.empty?
             end
             raise PlayerActedBeforeSittingAtTable
@@ -148,12 +160,11 @@ class PlayersAtTheTable
    end
    
    def sanity_check_blinds(blinds)
-      out_of_bounds_blind_position = blinds.keys.find do |position|
-         !position.seat_in_bounds?(number_of_players)
+      while blinds.length > number_of_players
+         blinds.pop
       end
-      
-      if out_of_bounds_blind_position
-         raise BlindPositionOutOfBounds, out_of_bounds_blind_position.to_s
+      while blinds.length < number_of_players
+         blinds << 0
       end
       
       blinds
@@ -161,12 +172,14 @@ class PlayersAtTheTable
    
    # @param [Integer] n A number of actions.
    # @param [Integer] round The round in which the actions were taken.
+   # @param [Array<Player>] players_who_could_act The set of players who could
+   #  have acted after +n+ actions in round +round+.
    # @return [Player] The player who is next to act after +n+ actions.
    # @raise InsufficientFirstPositionsProvided
    # @raise NoActionsHaveBeenTaken
-   def player_to_act_after_n_actions(n, round=@transition.next_state.round)
-      
-#      puts "@first_positions_relative_to_dealer: #{@first_positions_relative_to_dealer}, n: #{n}"
+   def player_to_act_after_n_actions(n, round=@transition.next_state.round,
+                                     players_who_could_act=active_players)
+      return nil if players_who_could_act.empty?
       
       begin
          position_relative_to_dealer_to_act = (@first_positions_relative_to_dealer[round] + n) % number_of_players
@@ -174,7 +187,9 @@ class PlayersAtTheTable
          raise InsufficientFirstPositionsProvided, round - (@first_positions_relative_to_dealer.length - 1)
       end
       
-      player_to_act = active_players.find { |player| position_relative_to_dealer(player) >= position_relative_to_dealer_to_act }
+      player_to_act = players_who_could_act.find do |player|
+         position_relative_to_dealer(player) == position_relative_to_dealer_to_act
+      end
       
       raise NoPlayerToActAfterNActions, n unless player_to_act
       
@@ -188,40 +203,26 @@ class PlayersAtTheTable
          player = @players[i]
 
          player.start_new_hand!(
-            lambda do
-               if @blinds[position_relative_to_dealer(player)]
-                  @blinds[position_relative_to_dealer(player)]
-               else
-                  0
-               end
-            end.call,
+            @blinds[position_relative_to_dealer(player)],
             @initial_stacks[i], # @todo if @is_doyles_game
-            lambda do
-               if user_player.equals?(player)
-                  @transition.next_state.users_hole_cards
-               else
-                  Hand.new
-               end
-            end.call
+            @transition.next_state.list_of_hole_card_hands[position_relative_to_dealer(player)]
          )
       end
    end
    
-   def assign_hole_cards_to_opponents!
-      opponents.each do |opponent|
-         unless opponent.folded?
-            opponent.assign_cards! @transition.next_state.list_of_hole_card_hands[position_relative_to_dealer(opponent)]
-         end
+   def assign_hole_cards_to_players!
+      @players.each do |player|
+         player.assign_cards! @transition.next_state.list_of_hole_card_hands[position_relative_to_dealer(player)]
       end
    end
    
    def update_state_of_players!
-      next_player_to_act.take_action! @transition.next_state.last_action
+      assign_hole_cards_to_players!
       
-      if hand_ended?
-         assign_hole_cards_to_opponents!
-      elsif @transition.new_round?
-         @players.each { |player| player.start_next_round! }
+      player_who_acted_last.take_action! @transition.next_state.last_action
+      
+      if @transition.new_round?
+         @players.each { |player| player.start_new_round! }
       end
    end
    
