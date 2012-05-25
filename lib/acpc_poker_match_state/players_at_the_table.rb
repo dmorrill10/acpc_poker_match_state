@@ -8,8 +8,6 @@ require 'acpc_poker_types'
 
 class PlayersAtTheTable
    include AcpcPokerTypesHelper
-   #include AcpcPokerTypesDefs
-   #include AcpcPokerMatchStateDefs
    
    exceptions :player_acted_before_sitting_at_table,
       :no_players_to_seat, :users_seat_out_of_bounds,
@@ -163,6 +161,34 @@ class PlayersAtTheTable
       @players.map { |player| player.chip_balance }
    end
    
+   # @param [Integer] player The player of which the position relative to the
+   #  dealer is desired.
+   # @return [Integer] The position relative to the user of the given player,
+   #  +player+, indexed such that the player immediately to the left of the
+   #  dealer has a +position_relative_to_dealer+ of zero.
+   # @example The player immediately to the left of the user has
+   #     +position_relative_to_user+ == 0
+   # @example The user has
+   #     +position_relative_to_user+ == +number_of_players+ - 1
+   # @raise (see Integer#position_relative_to)
+   def position_relative_to_user(player)
+      player.seat.position_relative_to user_player.seat, number_of_players
+   end
+   
+   # @param [Integer] player The player of which the position relative to the
+   #  dealer is desired.
+   # @return [Integer] The position relative to the dealer of the given player,
+   #  +player+, indexed such that the player immediately to to the left of the
+   #  dealer has a +position_relative_to_dealer+ of zero.
+   # @raise (see Integer#seat_from_relative_position)
+   # @raise (see Integer#position_relative_to)
+   def position_relative_to_dealer(player)
+      seat_of_dealer = @users_seat.seat_from_relative_position(
+         users_position_relative_to_dealer, number_of_players)
+      
+      player.seat.position_relative_to seat_of_dealer, number_of_players
+   end
+   
    # @return [Set] The set of legal actions for the currently acting player.
    #def legal_actions
    #   list_of_action_symbols = if acting_player_sees_wager?
@@ -190,34 +216,6 @@ class PlayersAtTheTable
       else
          state.round
       end
-   end
-   
-   # @param [Integer] player The player of which the position relative to the
-   #  dealer is desired.
-   # @return [Integer] The position relative to the user of the given player,
-   #  +player+, indexed such that the player immediately to the left of the
-   #  dealer has a +position_relative_to_dealer+ of zero.
-   # @example The player immediately to the left of the user has
-   #     +position_relative_to_user+ == 0
-   # @example The user has
-   #     +position_relative_to_user+ == +number_of_players+ - 1
-   # @raise (see Integer#position_relative_to)
-   def position_relative_to_user(player)
-      player.seat.position_relative_to user_player.seat, number_of_players
-   end
-   
-   # @param [Integer] player The player of which the position relative to the
-   #  dealer is desired.
-   # @return [Integer] The position relative to the dealer of the given player,
-   #  +player+, indexed such that the player immediately to to the left of the
-   #  dealer has a +position_relative_to_dealer+ of zero.
-   # @raise (see Integer#seat_from_relative_position)
-   # @raise (see Integer#position_relative_to)
-   def position_relative_to_dealer(player)
-      seat_of_dealer = @users_seat.seat_from_relative_position(
-         users_position_relative_to_dealer, number_of_players)
-      
-      player.seat.position_relative_to seat_of_dealer, number_of_players
    end
    
    def sanity_check_players(players)
