@@ -196,5 +196,8 @@ describe PlayersAtTheTable do
       @patient.users_turn_to_act?.should == @users_turn_to_act
       @patient.chip_stacks.should == @chip_stacks
       @patient.chip_balances.should == @chip_balances
+      #@patient.chip_contributions.should == @chip_contributions
+      #@patient.chip_balance_over_hand.should == @chip_balance_over_hand
+      #@patient.match_state_string.should == @match_state
    end
 end

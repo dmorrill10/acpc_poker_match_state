@@ -1,316 +1,241 @@
 
 require File.expand_path('../support/spec_helper', __FILE__)
 
+# Gems
+require 'acpc_poker_types/types/player'
+require 'acpc_poker_types/types/game_definition'
+
 # Local modules
-#require File.expand_path('../support/model_test_helper', __FILE__)
+require File.expand_path('../support/dealer_data', __FILE__)
 
 # Local classes
 require File.expand_path('../../lib/acpc_poker_match_state/match_state', __FILE__)
 
 describe MatchState do
-   #include ModelTestHelper
+   include DealerData
    
-   pending "Since this class has so much state and uses so many classes, it's really hard to test and I can't think of a good way to do it yet."
+   # @todo integrate this into the data where its collected
+   GAME_DEFS = {
+      limit: {
+         stack_size: 400, small_bets: [2, 2, 4, 4],
+         first_positions_relative_to_dealer: [1, 0, 0, 0],
+         number_of_hands: 100
+      },
+      nolimit: {
+         stack_size: 20000, small_bets: [100, 100, 100, 100],
+         first_positions_relative_to_dealer: [1, 0, 0, 0],
+         number_of_hands: 100
+      }
+   }
    
-   #describe 'Given the holdem.nolimit.2p.reverse_blinds.game game definition' do
-   #   game_definition = mock 'GameDefinition'
-   #   game_definition.stubs(:small_blind).returns(5)
-   #   game_definition.stubs(:big_blind).returns(10)
-   #   game_definition.stubs(:list_of_blinds).returns([10, 5])
-   #   game_definition.stubs(:number_of_hole_cards).returns(2)
-   #   game_definition.stubs(:number_of_ranks).returns(13)
-   #   game_definition.stubs(:number_of_suits).returns(4)
-   #   game_definition.stubs(:list_of_player_stacks).returns([500, 500])
-   #   game_definition.stubs(:max_raise_in_each_round).returns([3, 4, 4, 4])
-   #   game_definition.stubs(:first_player_position_in_each_round).returns([2, 1, 1, 1])
-   #   game_definition.stubs(:minimum_wager_in_each_round)
-   #   game_definition.stubs(:number_of_board_cards_in_each_round)
-   #   game_definition.stubs(:number_of_rounds)
-   #   game_definition.stubs(:number_of_players)
-   #   game_definition.stubs(:betting_type)      
-   #end
-   #before(:each) do
-   #   @game_definition = create_game_definition
-   #   
-   #   @players = []
-   #   @game_definition.number_of_players.times do |i|
-   #      @players << mock('Player')
-   #      @players[i].stubs(:active?).returns(true)
-   #      @players[i].stubs(:is_all_in=).with(false)
-   #      @players[i].stubs(:has_folded=).with(false)
-   #      @players[i].stubs(:has_folded).returns(false)
-   #      @players[i].stubs(:position_relative_to_dealer).returns(i)
-   #      @players[i].stubs(:stack).returns(@game_definition.list_of_player_stacks[i])
-   #      @players[i].stubs(:stack=).with(@game_definition.list_of_player_stacks[i])
-   #      @players[i].stubs(:current_wager_faced=).with(@game_definition.big_blind)
-   #      @players[i].stubs(:call_current_wager!)
-   #      @players[i].stubs(:hole_cards=)
-   #   end      
-   #   
-   #   big_blind_player = @players[player_who_submitted_big_blind_index]
-   #   big_blind_player.stubs(:current_wager_faced=).with(0)
-   #   big_blind_player.stubs(:current_wager_faced).returns(0)
-   #   big_blind_player.stubs(:name).returns('big_blind_player')
-   #   
-   #   small_blind_player = @players[player_who_submitted_small_blind_index]
-   #   small_blind_player.stubs(:current_wager_faced=).with(@game_definition.big_blind - @game_definition.small_blind)
-   #   small_blind_player.stubs(:current_wager_faced).returns(0)
-   #   small_blind_player.stubs(:name).returns('small_blind_player')
-   #   #
-   #   # TODO Find all the other players that didn't submit a blind
-   #   #other_player.stubs(:current_wager_faced=).with(big_blind)
-   #   #other_player.stubs(:current_wager_faced).returns(0)
-   #   #other_player.stubs(:name).returns('other_player')
-   #   
-   #   @position_relative_to_dealer_next_to_act = 1
-   #   
-   #   start_new_game! @game_definition, @players
-   #end
-   #
-   #
-   # Properly reports state ###################################################
+   describe '#update!' do
+      it "keeps track of state for a sequence of match states and actions in Doyle's game" do
+         # @todo Move into data retrieval method
+         DealerData::DATA.each do |num_players, data_by_num_players|
+            @number_of_players = num_players
+            ((0..(num_players-1)).map{ |i| (i+1).to_s }).each do |seat|
+               data_by_num_players.each do |type, data_by_type|
+                  turns = data_by_type[:actions]
+                  
+                  # Data from game def
+                  number_of_hands = GAME_DEFS[type][:number_of_hands]
+                  stack_size = GAME_DEFS[type][:stack_size]
+                  small_bets = GAME_DEFS[type][:small_bets]
+                  big_blind = small_bets.first
+                  small_blind = big_blind/2
+                  blinds = [big_blind, small_blind]
+                  while blinds.length < num_players
+                     blinds << 0
+                  end
+                  first_positions_relative_to_dealer = GAME_DEFS[type][:first_positions_relative_to_dealer]
+                  users_seat = seat.to_i - 1
+                  
+                  game_def = mock 'GameDefinition'
+                  game_def.stubs(:first_positions_relative_to_dealer).returns(first_positions_relative_to_dealer)
+                  game_def.stubs(:number_of_players).returns(num_players)
+                  game_def.stubs(:blinds).returns(blinds)
+                  game_def.stubs(:chip_stacks).returns(@chip_stacks)
+                  
+                  # Setup players
+                  @players = []
+                  num_players.times do |i|
+                     name = "p#{i + 1}"
+                     player_seat = i
+                     @players << Player.join_match(name, player_seat, stack_size)
+                  end
+                  player_names = @players.map { |player| player.name }
+                  @chip_balances = @players.map { |player| player.chip_balance }
+                  @user_player = @players[users_seat]
+                  @opponents = @players.select { |player| !player.eql?(@user_player) }
+                  
+                  # Initialize patient
+                  # @todo Change to MatchState
+                  @patient = MatchState.new game_def, users_seat, player_names,
+                     number_of_hands
+                  
+                  # Sample the dealer match string and action data
+                  number_of_states = 200
+                  number_of_states.times do |i|
+                     turn = turns[i]
+                     next_turn = turns[i + 1]
+                     
+                     index_of_next_player_to_act = next_turn[:from_players].keys.first.to_i - 1
+                     @next_player_to_act = if index_of_next_player_to_act < 0
+                        nil
+                     else
+                        @players[index_of_next_player_to_act]
+                     end
+                     
+                     @users_turn_to_act = if @next_player_to_act
+                        @next_player_to_act.seat == users_seat
+                     else
+                        false
+                     end
+                     
+                     from_player_message = turn[:from_players]
+                     
+                     match_state_string = turn[:to_players][seat]
+                     
+                     prev_round = if @match_state then @match_state.round else nil end
+                     @match_state = MatchStateString.parse match_state_string
+                     
+                     @hole_card_hands = order_by_seat_from_dealer_relative @match_state.list_of_hole_card_hands,
+                        users_seat, @match_state.position_relative_to_dealer
+                     
+                     # Set values based on whether or not it's the initial state
+                     if @match_state.first_state_of_first_round?
+                        @player_who_acted_last = nil
+                        @player_acting_sequence = []
+                        @player_acting_sequence_string = ''
+                        
+                        # Adjust stacks and balances
+                        @chip_stacks = []
+                        @players.each_index { |j| @chip_stacks << stack_size }
+                        @chip_stacks.each_index do |j|
+                           @chip_stacks[j] -= blinds[positions_relative_to_dealer[j]]
+                           @chip_balances[j] -= blinds[positions_relative_to_dealer[j]]
+                        end
+                     else
+                        seat_taking_action = from_player_message.keys.first
+                        
+                        @last_action = PokerAction.new from_player_message[seat_taking_action]
+                        #@todo Adjust stacks and balances based on last action
+                        seat_of_last_player_to_act = seat_taking_action.to_i - 1
+                        
+                        @player_who_acted_last = @players[seat_of_last_player_to_act]
+                        
+                        @player_acting_sequence << [] if @player_acting_sequence.empty?
+                        @player_acting_sequence.last << seat_of_last_player_to_act
+                        @player_acting_sequence_string += seat_of_last_player_to_act.to_s
+                     end
+
+                     # Update values if the round or hand has changed
+                     if @match_state.round != prev_round || @match_state.first_state_of_first_round?
+                        @player_acting_sequence << []
+                     end
+                     if @match_state.round != prev_round && !@match_state.first_state_of_first_round?
+                        @player_acting_sequence_string += '/'
+                     end
+
+                     # Update the patient
+                     @patient.update! @match_state
+                     
+                     # Retrieve values to check
+                     @active_players = @players.select { |player| player.active? }
+                     @non_folded_players = @players.select { |player| !player.folded? }
+                     @opponents_cards_visible = @opponents.any? { |player| !player.hole_cards.empty? }
+                     @reached_showdown = @opponents_cards_visible
+                     @less_than_two_non_folded_players = @non_folded_players.length < 2
+                     @hand_ended = @less_than_two_non_folded_players || @reached_showdown
+                     @player_with_dealer_button = nil
+                     @players.each_index do |j|
+                        if positions_relative_to_dealer[j] == @players.length - 1
+                           @player_with_dealer_button = @players[j]
+                        end
+                     end
+                     @player_blind_relation = @players.inject({}) do |hash, player|
+                        hash[player] = blinds[positions_relative_to_dealer[player.seat]]
+                        hash
+                     end
+                     find_players_who_submitted_blinds blinds
+                     
+                     check_patient
+                  end
+               end
+            end
+         end
+      end
+   end
    
-   #it 'properly reports which player has the dealer button' do
-   #   match_state_string = mock('MatchStateString')
-   #   
-   #   player_names = "p1, p2"
-   #   number_of_hands = 1
-   #   
-   #   patient = MatchState.new game_def, match_state_string, player_names, number_of_hands
-   #   
-   #   player_with_the_dealer_button = @players[player_with_the_dealer_button_index]
-   #   
-   #   @patient.player_with_the_dealer_button.should be player_with_the_dealer_button
-   #end
-   #
-   #it 'properly reports which player submitted the big blind' do
-   #   player_who_submitted_big_blind = @players[player_who_submitted_big_blind_index]
-   #   
-   #   @patient.player_who_submitted_big_blind.should be player_who_submitted_big_blind
-   #end
-   #
-   #it 'properly reports which player submitted the small blind' do
-   #   player_who_submitted_small_blind = @players[player_who_submitted_small_blind_index]
-   #   
-   #   @patient.player_who_submitted_small_blind.should be player_who_submitted_small_blind
-   #end
-   #
-   #it 'properly reports which player is next to act' do
-   #   player_whose_turn_is_next = @players[player_whose_turn_is_next_index]
-   #   
-   #   @patient.player_whose_turn_is_next.should be player_whose_turn_is_next
-   #end
-   #
-   #it 'properly reports which player acted last' do
-   #   player_who_acted_last = nil
-   #   @patient.player_who_acted_last.should be player_who_acted_last
-   #   
-   #   @match_state.stubs(:last_action).returns(ACTION_TYPES[:call])
-   #   @patient.update_state! @match_state
-   #   @position_relative_to_dealer_acted_last = 1
-   #   player_who_acted_last = @players[player_who_acted_last_index]
-   #   
-   #   @patient.player_who_acted_last.should be player_who_acted_last
-   #end
-   #
-   #it 'properly reports the pot size' do
-   #   pending
-   #   #@patient.pot_size.should be pot_size
-   #end
-   #
-   #it "properly reports stack sizes at the beginning of a hand" do
-   #   pending
-   #   @patient.list_of_player_stacks.should == @game_definition.list_of_player_stacks
-   #end
-   #
-   #it "properly resets stack sizes at the beginning of a hand in Doyle's game" do
-   #   @patient.list_of_player_stacks.should be == @game_definition.list_of_player_stacks
-   #   pending "change the stack sizes, then start a new hand and check that they have reset"
-   #end
-   #
-   #it "properly reports the user's hole cards" do
-   #   pending
-   #   @patient.users_hole_cards.should be @match_state.users_hole_cards
-   #end
-   #
-   #it "properly reports the hole cards of the user's opponents" do
-   #   pending
-   #   @patient.list_of_opponents_hole_cards.should be @match_state.list_of_opponents_hole_cards
-   #end
-   #
-   #it 'properly reports the betting actions for each player' do
-   #   pending
-   #   @patient.list_of_betting_actions.should be @match_state.list_of_betting_actions
-   #end
-   #
-   #it 'properly reports the board cards' do
-   #   pending
-   #   @patient.list_of_board_cards.should be @match_state.list_of_board_cards
-   #end
-   #
-   #it 'properly reports the hand number' do
-   #   pending
-   #   @patient.hand_number.should be @match_state.hand_number
-   #end
-   #
-   #it "properly reports the user's position" do
-   #   pending
-   #   @patient.user_position.should be @match_state.position_relative_to_dealer
-   #end
-   #
-   #it 'properly reports the last action' do
-   #   pending
-   #   @patient.last_action.should be @match_state.last_action
-   #end
-   #
-   #it 'properly reports the list of legal actions' do
-   #   pending
-   #   @patient.legal_actions.should be legal_actions
-   #end
-   #
-   #it "properly reports the round number for all rounds in Texas Hold'em" do
-   #   for_every_round do |round|
-   #      @patient.round.should be == round
-   #   end
-   #end
-   #
-   #it 'properly reports the active players' do
-   #   pending
-   #   @patient.active_players.should be @active_players
-   #end
-   #
-   #it "properly reports whether or not it is the user's turn next at the beginning of every round in Texas Hold'em" do
-   #   for_every_round do |round|
-   #      @player_manager.stubs(:users_turn_to_act?).returns(@game_definition.first_player_position_in_each_round[round]-1 == @user_position)
-   #      @patient.users_turn_to_act?.should be == (@game_definition.first_player_position_in_each_round[round]-1 == @user_position)
-   #   end
-   #end
-   #
-   #
-   #it "correctly reports the first player to act for all rounds in Texas Hold'em" do
-   #   for_every_round do |round|
-   #      @patient.position_relative_to_dealer_next_to_act.should == @game_definition.first_player_position_in_each_round[round]-1
-   #   end
-   #end
-   #
-   #it "correctly reports the whether or not the user is the first player to act for all rounds in Texas Hold'em" do
-   #   for_every_round do |round|
-   #      @patient.users_turn_to_act?.should == (@user_position == @game_definition.first_player_position_in_each_round[round]-1)
-   #   end
-   #end
-   #
-   #
-   ## Updates state based on opponent actions ##################################
-   #
-   #it 'at the beginning of a hand, the current wager should be the big blind for all players except those who submitted a blind' do
-   #   #@patient.player.should be ==
-   #   pending
-   #end
-   #
-   #it 'at the beginning of a hand, the current wager for the player who submitted the small blind should be big blind minus small blind' do
-   #   pending
-   #   #@patient.player_who_submitted_small_blind.current_wager_faced.should be == @game_definition.big_blind - @game_definition.small_blind
-   #end
-   #
-   #it 'at the beginning of a hand, the current wager for the player who submitted the big blind should be zero' do
-   #   pending
-   #   #@patient.player_who_submitted_big_blind.current_wager_faced.should be == 0
-   #end   
-   #
-   #it "updates the current wager faced by all players when a raise or bet is seen" do
-   #   pending
-   #end
-   #
-   #it "updates state based on call or check" do
-   #   pending
-   #   #amount = '9001'
-   #   #action = amount + ACTION_TYPES[:raise]
-   #   #expected_string = raw_match_state_string action
-   #   #@patient.take_bet_action(amount).should be == expected_string
-   #   #TODO check that the user's stack is updated correctly
-   #end
-   #
-   #it "updates state based on fold" do
-   #   pending
-   #   #amount = '9001'
-   #   #action = amount + ACTION_TYPES[:raise]
-   #   #expected_string = raw_match_state_string action
-   #   #@patient.take_bet_action(amount).should be == expected_string
-   #   #TODO check that the user's stack is updated correctly
-   #end
-   #
-   #it "updates state based on limit raise or bet" do
-   #   pending
-   #   expected_string = setup_action_test @match_state, ACTION_TYPES[:raise]
-   #   @patient.make_raise_or_bet_action
-   #   
-   #   first_player_position = @game_definition.first_player_position_in_each_round[0] - 1
-   #   raise_size = @game_definition.minimum_wager_in_each_round[0]
-   #   player_stack = @game_definition.list_of_player_stacks[first_player_position] - raise_size
-   #   list_of_player_stacks = @game_definition.list_of_player_stacks.dup
-   #   list_of_player_stacks[first_player_position] = player_stack
-   #   
-   #   pending "need to adjust for current wager"
-   #   @patient.list_of_player_stacks.should be == list_of_player_stacks
-   #end
-   #
-   #it "updates state based on no-limit raise or bet" do
-   #   pending
-   #   #amount = '9001'
-   #   #action = amount + ACTION_TYPES[:raise]
-   #   #expected_string = raw_match_state_string action
-   #   #@patient.take_bet_action(amount).should be == expected_string
-   #   #TODO check that the user's stack is updated correctly
-   #end
-   #
-   #
-   ## Helper methods ###########################################################
-   #
-   #def for_every_round
-   #   MAX_VALUES[:rounds].times do |round|
-   #      @match_state.stubs(:round).returns(round)
-   #      @match_state.stubs(:number_of_actions_in_current_round).returns(0)
-   #      
-   #      @patient.update_state! @match_state
-   #      
-   #      yield round
-   #   end
-   #end
-   #
-   #def start_new_game!(game_definition, players)
-   #   @patient = PlayerManager.new game_definition, players
-   #   (@match_state, @user_position) = create_initial_match_state(game_definition.number_of_players)
-   #   
-   #   @patient.start_new_hand! @match_state
-   #end
-   #
-   #def dealer_position_relative_to_dealer
-   #   @game_definition.number_of_players - 1
-   #end
-   #
-   #def player_with_the_dealer_button_index
-   #   @players.index { |player| dealer_position_relative_to_dealer == player.position_relative_to_dealer }
-   #end
-   #
-   #def player_who_submitted_big_blind_index
-   #   big_blind_position = if is_reverse_blinds? then BLIND_POSITIONS_RELATIVE_TO_DEALER_REVERSE_BLINDS[:submits_big_blind] else BLIND_POSITIONS_RELATIVE_TO_DEALER_NORMAL_BLINDS[:submits_big_blind] end
-   #   @players.index { |player| player.position_relative_to_dealer == big_blind_position }
-   #end
-   #
-   #def player_who_submitted_small_blind_index
-   #   small_blind_position = if is_reverse_blinds? then BLIND_POSITIONS_RELATIVE_TO_DEALER_REVERSE_BLINDS[:submits_small_blind] else BLIND_POSITIONS_RELATIVE_TO_DEALER_NORMAL_BLINDS[:submits_small_blind] end
-   #   @players.index { |player| player.position_relative_to_dealer == small_blind_position }
-   #end
-   #
-   #def player_whose_turn_is_next_index
-   #   @players.index { |player| player.position_relative_to_dealer == @position_relative_to_dealer_next_to_act }
-   #end
-   #
-   #def player_who_acted_last_index
-   #   @players.index { |player| player.position_relative_to_dealer == @position_relative_to_dealer_acted_last }
-   #end
-   #
-   #def is_reverse_blinds?
-   #   2 == @game_definition.number_of_players
-   #end
+   def positions_relative_to_dealer
+      positions = []
+      @match_state.list_of_hole_card_hands.each_index do |pos_rel_dealer|
+         @hole_card_hands.each_index do |seat|
+            if @hole_card_hands[seat] == @match_state.list_of_hole_card_hands[pos_rel_dealer]
+               positions[seat] = pos_rel_dealer
+            end
+         end
+         @match_state.list_of_hole_card_hands
+      end
+      positions
+   end
+   def order_by_seat_from_dealer_relative(list_of_hole_card_hands, users_seat,
+                                          users_pos_rel_to_dealer)
+      new_list = [].fill Hand.new, (0..list_of_hole_card_hands.length - 1)
+      list_of_hole_card_hands.each_index do |pos_rel_dealer|
+         position_difference = pos_rel_dealer - users_pos_rel_to_dealer
+         seat = (position_difference + users_seat) % list_of_hole_card_hands.length
+         new_list[seat] = list_of_hole_card_hands[pos_rel_dealer]
+      end
+      
+      new_list
+   end
+   def check_patient
+      @patient.player_acting_sequence.should == @player_acting_sequence
+      @patient.number_of_players.should == @number_of_players
+      @patient.player_who_acted_last.should be @player_who_acted_last
+      @patient.next_player_to_act.should be @next_player_to_act
+      (@patient.players.map { |player| player.hole_cards }).should == @hole_card_hands
+      @patient.user_player.should == @user_player
+      @patient.opponents.should == @opponents
+      @patient.active_players.should == @active_players
+      @patient.non_folded_players.should == @non_folded_players
+      @patient.opponents_cards_visible?.should == @opponents_cards_visible
+      @patient.reached_showdown?.should == @reached_showdown
+      @patient.less_than_two_non_folded_players?.should == @less_than_two_non_folded_players                     
+      @patient.hand_ended?.should == @hand_ended
+      @patient.player_with_dealer_button.should == @player_with_dealer_button
+      @patient.player_blind_relation.should == @player_blind_relation
+      @patient.player_acting_sequence_string.should == @player_acting_sequence_string
+      @patient.users_turn_to_act?.should == @users_turn_to_act
+      @patient.chip_stacks.should == @chip_stacks
+      @patient.chip_balances.should == @chip_balances
+      @patient.chip_contributions.should == @chip_contributions
+      @patient.chip_balance_over_hand.should == @chip_balance_over_hand
+      
+      @patient.match_ended?.should == @match_ended
+      @patient.match_state_string.should == @match_state
+      @patient.player_who_submitted_bb.should == @player_who_submitted_bb
+      @patient.player_who_submitted_sb.should == @player_who_submitted_sb
+      (@patient.players.map { |player| player.amount_to_call }).should == @amounts_to_call
+      @patient.min_wager.should == @min_wager
+      #betting_sequence: betting_sequence,
+      @patient.legal_actions.should == @legal_actions
+   end
+      
+   def find_players_who_submitted_blinds(blinds)
+      blinds_without_bb = blinds.dup
+      blinds_without_bb.delete blinds_without_bb.max
+      pos_rel_of_dealer_of_player_who_submitted_sb = blinds.index blinds_without_bb.max
+      pos_rel_of_dealer_of_player_who_submitted_bb = blinds.index blinds.max
+      @player_who_submitted_bb = nil
+      @player_who_submitted_sb = nil
+      positions_relative_to_dealer.each_index do |seat|
+         if positions_relative_to_dealer[seat] == pos_rel_of_dealer_of_player_who_submitted_bb
+            @player_who_submitted_bb = @players[seat]
+         elsif positions_relative_to_dealer[seat] == pos_rel_of_dealer_of_player_who_submitted_sb
+            @player_who_submitted_sb = @players[seat]
+         end
+      end
+   end
 end

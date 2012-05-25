@@ -26,18 +26,19 @@ class MatchState
    attr_reader :minimum_wager
    
    # @param [GameDefinition] game_definition The definition of the game being played.
-   # @param [MatchStateString] match_state_string The initial state of this match.
+   # @param [Integer] users_seat The user's seat (zero indexed).
    # @param [Array] player_names The names of the players in this match.
    # @param [Integer] number_of_hands The number of hands in this match.
-   # @todo bundle player names and number of hands into something
-   def initialize(game_definition, match_state_string, player_names, number_of_hands)
+   def initialize(game_definition, users_seat, player_names, number_of_hands)
       @game_definition = game_definition
       # @todo Ensure that @player_names.length == @game_definition.number_of_players
       @player_names = player_names
       @number_of_hands = number_of_hands
-      @match_state_string = match_state_string
       
-      @players = create_players
+      PlayersAtTheTable.seat_players create_players, users_seat,
+                     @game_definition.first_positions_relative_to_dealer,
+                     @game_definition.blinds
+                     
       assign_users_cards!
       set_initial_internal_state!
    end
@@ -171,14 +172,6 @@ class MatchState
       @game_definition.number_of_players - 1
    end
    
-   # @todo Move to MatchStateString (it should know how many players are in
-   #  this match, but I don't remember if it does yet.)
-   # @param [Integer] seat A seat at the table.
-   # @return [Integer] The position relative to the dealer of the given +seat+.
-   def position_relative_to_dealer(seat)
-      (@match_state_string.position_relative_to_dealer + seat) % @game_definition.number_of_players
-   end
-   
    # @return [Integer] The first player position relative to the dealer in the current round.
    def first_player_position_in_current_round
       @game_definition.first_player_position_in_each_round[@match_state_string.round]
@@ -304,18 +297,12 @@ class MatchState
    
    # @todo Move to PlayerManager
    def create_players
-      # The array of players is built so that it's centered on the user.
-      # The user is at index USERS_INDEX = 0, the player to the user's immediate left is
-      # at index 1, etc.
       players = []
-      @game_definition.number_of_players.times do |player_index|
-         name = @player_names[player_index]
-         seat = player_index         
-         my_position_relative_to_dealer = position_relative_to_dealer seat
-         position_relative_to_user = users_position_relative_to_user - player_index
-         stack = ChipStack.new @game_definition.list_of_player_stacks[player_index]
+      @game_definition.number_of_players.times do |seat|
+         name = @player_names[seat]   
+         stack = ChipStack.new @game_definition.chip_stacks[seat]
          
-         players << Player.new(name, seat, my_position_relative_to_dealer, position_relative_to_user, stack)
+         players << Player.join_match(name, seat, stack)
       end
       
       players

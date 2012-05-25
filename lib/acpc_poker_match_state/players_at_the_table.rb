@@ -16,7 +16,8 @@ class PlayersAtTheTable
       :multiple_players_have_the_same_seat, :insufficient_first_positions_provided,
       :first_position_out_of_bounds, :no_player_to_act_after_n_actions
    
-   attr_reader :players
+   # @todo Change this!
+   attr_accessor :players
    
    # @return [Array<Array<Integer>>] The sequence of seats that acted, separated by round, or +nil+ if no actions have been taken.
    attr_reader :player_acting_sequence
