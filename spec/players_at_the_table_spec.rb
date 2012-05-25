@@ -22,7 +22,7 @@ describe PlayersAtTheTable do
                   various_numbers_of_players do |number_of_players|
                      player_list = init_vanilla_player_list(number_of_players)
                      
-                     player_list[0].stubs(:actions_taken_in_current_hand).returns([[mock('Action')]])
+                     player_list[0].stubs(:actions_taken_this_hand).returns([[mock('Action')]])
                      expect do
                         PlayersAtTheTable.seat_players(
                            player_list, 0, first_positions_relative_to_dealer(1),
@@ -152,7 +152,7 @@ describe PlayersAtTheTable do
                         
                         player_acting_sequence.last << index_of_player_who_acted_last
                         
-                        setup_actions_taken_in_current_hand! players, index_of_player_who_acted_last,
+                        setup_actions_taken_this_hand! players, index_of_player_who_acted_last,
                            match_state.round, match_state.last_action
                         
                         match_state.stubs(:list_of_hole_card_hands).returns(@hands)
@@ -213,11 +213,11 @@ describe PlayersAtTheTable do
          player_acting_sequence << []
          
          # Since this is a new round
-         @actions_taken_in_current_hand.each_index do |i|
-            @actions_taken_in_current_hand[i] << []
+         @actions_taken_this_hand.each_index do |i|
+            @actions_taken_this_hand[i] << []
          end
          
-         setup_actions_taken_in_current_hand! players, index_of_player_who_acted_last,
+         setup_actions_taken_this_hand! players, index_of_player_who_acted_last,
             last_round, action
          
          prev_example = create_and_check_update_example match_state, players, player_acting_sequence,
@@ -244,7 +244,7 @@ describe PlayersAtTheTable do
          
          player_acting_sequence.last << index_of_player_who_acted_last         
          
-         setup_actions_taken_in_current_hand! players, index_of_player_who_acted_last,
+         setup_actions_taken_this_hand! players, index_of_player_who_acted_last,
             match_state.round, action
          
          # Check result. Actions taken so far should be: cc/r
@@ -280,7 +280,7 @@ describe PlayersAtTheTable do
       
       player_acting_sequence = [[index_of_player_who_acted_last]]
       
-      setup_actions_taken_in_current_hand! players, index_of_player_who_acted_last,
+      setup_actions_taken_this_hand! players, index_of_player_who_acted_last,
          match_state.round, action
       
       next_player_to_act = players[index_of_next_player_to_act(
@@ -454,7 +454,7 @@ describe PlayersAtTheTable do
    end
    def init_vanilla_player(seat)
       player = mock('Player')
-      player.stubs(:actions_taken_in_current_hand).returns([[]])
+      player.stubs(:actions_taken_this_hand).returns([[]])
       player.stubs(:seat).returns(seat)      
       player.stubs(:chip_stack).returns(INITIAL_STACK_SIZE)
       player.stubs(:active?).returns(true)
@@ -462,10 +462,10 @@ describe PlayersAtTheTable do
       player
    end
    def init_actions_taken_in_current_round(number_of_players)
-      @actions_taken_in_current_hand = []
+      @actions_taken_this_hand = []
       number_of_players.times do |i|
          player_list = []
-         @actions_taken_in_current_hand << [player_list]
+         @actions_taken_this_hand << [player_list]
       end
    end
    def blinds(number_of_players)
@@ -493,25 +493,25 @@ describe PlayersAtTheTable do
    def first_positions_relative_to_dealer(number_of_rounds)
       [].fill 0, 0..(number_of_rounds - 1)
    end
-   def setup_actions_taken_in_current_hand!(players, index_of_player_who_acted_last,
+   def setup_actions_taken_this_hand!(players, index_of_player_who_acted_last,
                                             round, action)
-      actions_taken_in_current_hand_before_action_is_taken = []
-      @actions_taken_in_current_hand.each_index do |i|
-         actions_taken_in_current_hand_before_action_is_taken << []
-         @actions_taken_in_current_hand[i].each do |current_action|
-            actions_taken_in_current_hand_before_action_is_taken[i] << current_action.dup
+      actions_taken_this_hand_before_action_is_taken = []
+      @actions_taken_this_hand.each_index do |i|
+         actions_taken_this_hand_before_action_is_taken << []
+         @actions_taken_this_hand[i].each do |current_action|
+            actions_taken_this_hand_before_action_is_taken[i] << current_action.dup
          end
             
-         players[i].stubs(:actions_taken_in_current_hand).returns(actions_taken_in_current_hand_before_action_is_taken[i])
+         players[i].stubs(:actions_taken_this_hand).returns(actions_taken_this_hand_before_action_is_taken[i])
       end
       
-      @actions_taken_in_current_hand[index_of_player_who_acted_last][round] << action
+      @actions_taken_this_hand[index_of_player_who_acted_last][round] << action
       
       action_appended = states('action_appended').starts_as('no')
       players[index_of_player_who_acted_last].expects(:take_action!).with(action).then(action_appended.is('yes'))
       players.each_index do |i|
-         players[i].stubs(:actions_taken_in_current_hand).returns(
-            @actions_taken_in_current_hand[i]
+         players[i].stubs(:actions_taken_this_hand).returns(
+            @actions_taken_this_hand[i]
          ).when(action_appended.is('yes'))
       end
    end

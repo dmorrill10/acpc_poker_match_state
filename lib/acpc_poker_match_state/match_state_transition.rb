@@ -15,14 +15,8 @@ class MatchStateTransition
    
    def next_state!(new_state)
       @next_state = new_state
-      
-      puts "before: #{@next_state}"
-      
       yield
-      
       @last_state = @next_state
-      
-      puts "after: #{@last_state}"
    end
    
    # @return [Boolean] +true+ if the next state's round is different from the

@@ -23,6 +23,8 @@ class PlayersAtTheTable
    
    attr_reader :transition
    
+   attr_reader :blinds
+   
    alias_new :seat_players
    
    # @param [Array<Player>] players The players to seat at the table.
@@ -57,10 +59,7 @@ class PlayersAtTheTable
    
    # @param [MatchStateString] match_state_string The next match state.
    def update!(match_state_string)
-      @transition.next_state! match_state_string do
-         # @todo retrieve this rather than storing it
-         @users_position_relative_to_dealer = @transition.next_state.position_relative_to_dealer
-         
+      @transition.next_state! match_state_string do         
          remember_active_players!
          
          if @transition.initial_state?
@@ -90,7 +89,97 @@ class PlayersAtTheTable
       player_to_act_after_n_actions state.number_of_actions_this_round, state.round
    end
    
+   def opponents
+      @players.select { |player| player.seat != @users_seat }
+   end
+   
+   def user_player
+      @players.find { |player| @users_seat == player.seat }
+   end
+   
+   # @return [Array<Player>] The players who are active.
+   def active_players
+      @players.select { |player| player.active? }
+   end
+   
+   #@return [Array<Player>] The players who have not folded.
+   def non_folded_players
+      @players.select { |player| !player.folded? }
+   end
+   
+   # @return [Boolean] +true+ if the hand has ended, +false+ otherwise.
+   def hand_ended?
+      less_than_two_non_folded_players? || reached_showdown?
+   end
+   
+   def less_than_two_non_folded_players?   
+      non_folded_players.length < 2
+   end
+   
+   def reached_showdown?
+      opponents_cards_visible?
+   end
+   
+   # @return [Boolean] +true+ if any opponents cards are visible, +false+ otherwise.
+   def opponents_cards_visible?
+      opponents.any? { |player| !player.hole_cards.empty? }
+   end
+   
+   # @return [Player] The player with the dealer button.
+   def player_with_dealer_button
+      @players.find { |player| position_relative_to_dealer(player) == number_of_players - 1}
+   end
+   
+   # @return [Hash<Player, #to_i] Relation from player to the blind that player paid.
+   def player_blind_relation
+      @players.inject({}) do |relation, player|
+         relation[player] = @blinds[position_relative_to_dealer(player)]
+         relation
+      end
+   end
+   
+   # @return [String] player acting sequence as a string.
+   def player_acting_sequence_string
+      (@player_acting_sequence.map { |per_round| per_round.join('') }).join('/')
+   end
+   
+   # @return [Boolean] +true+ if it is the user's turn to act, +false+ otherwise.
+   def users_turn_to_act?
+      if next_player_to_act
+         next_player_to_act.seat == @users_seat
+      else
+         false
+      end
+   end
+   
+   # @return [Array<ChipStack>] Player stacks.
+   def chip_stacks
+      @players.map { |player| player.chip_stack }
+   end
+   
+   # return [Integer] The list containing each player's current chip balance.
+   def chip_balances
+      @players.map { |player| player.chip_balance }
+   end
+   
+   # @return [Set] The set of legal actions for the currently acting player.
+   #def legal_actions
+   #   list_of_action_symbols = if acting_player_sees_wager?
+   #      [:call, :fold, :raise]
+   #   elsif acting_player_contributed_to_the_pot_this_round?
+   #      [:check, :raise]
+   #   else
+   #      [:check, :bet]
+   #   end
+   #   
+   #   list_of_action_symbols.inject(Set.new) do |set, action_symbol|
+   #      set << PokerAction.new(action_symbol)
+   #   end
+   #end
+   
    private
+   
+   def users_position_relative_to_dealer() @transition.next_state.position_relative_to_dealer end
    
    def remember_active_players!() @active_players_before_update = active_players.dup end
    
@@ -125,7 +214,7 @@ class PlayersAtTheTable
    # @raise (see Integer#position_relative_to)
    def position_relative_to_dealer(player)
       seat_of_dealer = @users_seat.seat_from_relative_position(
-         @users_position_relative_to_dealer, number_of_players)
+         users_position_relative_to_dealer, number_of_players)
       
       player.seat.position_relative_to seat_of_dealer, number_of_players
    end
@@ -133,7 +222,7 @@ class PlayersAtTheTable
    def sanity_check_players(players)
       raise NoPlayersToSeat if players.empty?
       players.each do |player|
-         if player.actions_taken_in_current_hand && player.actions_taken_in_current_hand.any? do |actions_in_round|
+         if player.actions_taken_this_hand && player.actions_taken_this_hand.any? do |actions_in_round|
                !actions_in_round.empty?
             end
             raise PlayerActedBeforeSittingAtTable
@@ -226,155 +315,31 @@ class PlayersAtTheTable
       end
    end
    
-   def opponents
-      @players.select { |player| player.seat != @users_seat }
-   end
-   
-   def user_player
-      @players.find { |player| @users_seat == player.seat }
-   end
-   
-   # @return [Array<Player>] The players who are active.
-   def active_players
-      @players.select { |player| player.active? }
-   end
-   
-   #@return [Array<Player>] The players who have not folded.
-   def non_folded_players
-      @players.select { |player| !player.folded? }
-   end
-   
-   # @return [Boolean] +true+ if the hand has ended, +false+ otherwise.
-   def hand_ended?
-      less_than_two_non_folded_players? || reached_showdown?
-   end
-   
-   def less_than_two_non_folded_players?   
-      non_folded_players.length < 2
-   end
-   
-   def reached_showdown?
-      opponents_cards_visible?
-   end
-   
-   # @return [Boolean] +true+ if any opponents cards are visible, +false+ otherwise.
-   def opponents_cards_visible?
-      opponents.any? { |player| !player.hole_cards.empty? }
-   end
-   
-   
-   
-   
-   
-   
-   # Convienence methods for retrieving particular players
-   
-   # (see GameCore#player_who_submitted_small_blind)
-   def player_who_submitted_small_blind      
-      @players[player_who_submitted_small_blind_index]
-   end
-   
-   # (see GameCore#player_who_submitted_big_blind)
-   def player_who_submitted_big_blind      
-      @players[player_who_submitted_big_blind_index]
-   end
-   
-   # (see GameCore#player_with_the_dealer_button)
-   def player_with_the_dealer_button      
-      @players.each { |player| return player if dealer_position_relative_to_dealer == player.position_relative_to_dealer }
-   end
-
-   # Methods for retrieving the indices of particular players
-   
-   def player_with_the_dealer_button_index
-      @players.index { |player| dealer_position_relative_to_dealer == player.position_relative_to_dealer }
-   end
- 
-   def player_who_submitted_big_blind_index
-      big_blind_position = if is_reverse_blinds? then BLIND_POSITIONS_RELATIVE_TO_DEALER_REVERSE_BLINDS[:submits_big_blind] else BLIND_POSITIONS_RELATIVE_TO_DEALER_NORMAL_BLINDS[:submits_big_blind] end
-      @players.index { |player| player.position_relative_to_dealer == big_blind_position }
-   end
-   
-   def player_who_submitted_small_blind_index
-      small_blind_position = if is_reverse_blinds? then BLIND_POSITIONS_RELATIVE_TO_DEALER_REVERSE_BLINDS[:submits_small_blind] else BLIND_POSITIONS_RELATIVE_TO_DEALER_NORMAL_BLINDS[:submits_small_blind] end
-      @players.index { |player| player.position_relative_to_dealer == small_blind_position }
-   end
-   
-   def player_whose_turn_is_next_index
-      @players.index { |player| player.position_relative_to_dealer == position_relative_to_dealer_next_to_act }
-   end
-   
-   # Player position reference information
-   
-   def amounts_to_call
-      @players.inject({}) do |hash, player|
-         hash[player.name] = @pot.amount_to_call(player).to_i
-         hash
-      end
-   end
-   
-   # Convenience game logic methods
+   #def amounts_to_call
+   #   @players.inject({}) do |hash, player|
+   #      hash[player.name] = @pot.amount_to_call(player).to_i
+   #      hash
+   #   end
+   #end
    
    # @return [Boolean] +true+ if the match has ended, +false+ otherwise.
-   def match_ended?      
-      hand_ended? && last_hand?
-   end
-   
-   # @return [Boolean] +true+ if it is the user's turn to act, +false+ otherwise.
-   def users_turn_to_act?
-      users_turn_to_act = position_relative_to_dealer_next_to_act == @match_state_string.position_relative_to_dealer
-      users_turn_to_act &= !hand_ended?
-   end
+   #def match_ended?      
+   #   hand_ended? && last_hand?
+   #end
    
    # @return [Boolean] +true+ if the current hand is the last in the match.
-   def last_hand?
-      # @todo make sure +@match_state_string.hand_number+ is not greater than @number_of_hands
-      @match_state_string.hand_number == @number_of_hands - 1
-   end
+   #def last_hand?
+   #   # @todo make sure +@match_state_string.hand_number+ is not greater than @number_of_hands
+   #   @match_state_string.hand_number == @number_of_hands - 1
+   #end
 
-   def is_reverse_blinds?
-      2 == @game_definition.number_of_players
-   end
+   #def is_reverse_blinds?
+   #   2 == @game_definition.number_of_players
+   #end
    
-   def last_round?
-      @game_definition.number_of_rounds - 1 == @match_state_string.round 
-   end
-   
-   # Player chip information
-   
-   # (see GameCore#list_of_player_stacks)
-   def list_of_player_stacks
-      @players.map { |player| player.stack }
-   end
-   
-   # return [Integer] The list containing each player's current chip balance.
-   def list_of_player_chip_balances
-      @players.map { |player| player.chip_balance }
-   end
-   
-   # @return [Set] The set of legal actions for the currently acting player.
-   def legal_actions
-      list_of_action_symbols = if acting_player_sees_wager?
-         [:call, :fold, :raise]
-      elsif acting_player_contributed_to_the_pot_this_round?
-         [:check, :raise]
-      else
-         [:check, :bet]
-      end
-      
-      list_of_action_symbols.inject(Set.new) do |set, action_symbol|
-         set << PokerAction.new(action_symbol)
-      end         
-   end
-      
-   def player_acting_sequence_string
-      string = ''
-      (@match_state_string.round + 1).times do |i|
-         string += @player_acting_sequence[i].join('')
-         string += '/' unless i == @match_state_string.round
-      end
-      string
-   end
+   #def last_round?
+   #   @game_definition.number_of_rounds - 1 == @match_state_string.round 
+   #end
 end
 
 class Array
