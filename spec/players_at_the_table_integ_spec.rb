@@ -94,6 +94,8 @@ describe PlayersAtTheTable do
                         @player_who_acted_last = nil
                         @player_acting_sequence = []
                         @player_acting_sequence_string = ''
+                        @betting_sequence = []
+                        @betting_sequence_string = ''
                         
                         # Adjust stacks and balances
                         @chip_stacks = []
@@ -106,6 +108,7 @@ describe PlayersAtTheTable do
                         seat_taking_action = from_player_message.keys.first
                         
                         @last_action = PokerAction.new from_player_message[seat_taking_action]
+                        
                         #@todo Adjust stacks and balances based on last action
                         seat_of_last_player_to_act = seat_taking_action.to_i - 1
                         
@@ -114,14 +117,19 @@ describe PlayersAtTheTable do
                         @player_acting_sequence << [] if @player_acting_sequence.empty?
                         @player_acting_sequence.last << seat_of_last_player_to_act
                         @player_acting_sequence_string += seat_of_last_player_to_act.to_s
+                        @betting_sequence << [] if @betting_sequence.empty?
+                        @betting_sequence.last << @last_action
+                        @betting_sequence_string += @last_action.to_acpc
                      end
 
                      # Update values if the round or hand has changed
                      if @match_state.round != prev_round || @match_state.first_state_of_first_round?
                         @player_acting_sequence << []
+                        @betting_sequence << []
                      end
                      if @match_state.round != prev_round && !@match_state.first_state_of_first_round?
                         @player_acting_sequence_string += '/'
+                        @betting_sequence_string += '/'
                      end
 
                      # Update the patient
@@ -196,6 +204,8 @@ describe PlayersAtTheTable do
       @patient.users_turn_to_act?.should == @users_turn_to_act
       @patient.chip_stacks.should == @chip_stacks
       @patient.chip_balances.should == @chip_balances
+      @patient.betting_sequence.should == @betting_sequence
+      @patient.betting_sequence_string.should == @betting_sequence_string
       #@patient.chip_contributions.should == @chip_contributions
       #@patient.chip_balance_over_hand.should == @chip_balance_over_hand
       #@patient.match_state_string.should == @match_state
