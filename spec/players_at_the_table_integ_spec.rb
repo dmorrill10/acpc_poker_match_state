@@ -140,8 +140,6 @@ describe PlayersAtTheTable do
                         @chip_stacks[seat_of_last_player_to_act] -= @last_action.amount_to_put_in_pot
                         @chip_balances[seat_of_last_player_to_act] -= @last_action.amount_to_put_in_pot
                         
-                        #@todo Check final balance
-                        
                         @player_acting_sequence.last << seat_of_last_player_to_act
                         @player_acting_sequence_string += seat_of_last_player_to_act.to_s
                         @betting_sequence.last << @last_action
@@ -161,7 +159,20 @@ describe PlayersAtTheTable do
                         @player_acting_sequence << []
                         @betting_sequence << []
                      end
-
+                     
+                     #@todo Check final balance
+                     if !next_turn || MatchStateString.parse(next_turn[:to_players]['1']).first_state_of_first_round?
+                        result = data_by_type[:results][i]
+                        result.each do |player_name, final_balance|
+                           # @todo This assumption isn't robust
+                           player = @players.find { |p| p.name == player_name }
+                           
+                           @chip_balances[player.seat] = final_balance.to_i
+                           @chip_stacks[player.seat] = game_def.chip_stacks[positions_relative_to_dealer[player.seat]] + final_balance.to_i
+                           @chip_contributions[player.seat][-1] = final_balance.to_i
+                        end
+                     end
+                     
                      # Update the patient
                      @patient.update! @match_state
                      
