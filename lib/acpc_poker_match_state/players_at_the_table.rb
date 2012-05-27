@@ -14,15 +14,13 @@ class PlayersAtTheTable
       :multiple_players_have_the_same_seat, :insufficient_first_positions_provided,
       :first_position_out_of_bounds, :no_player_to_act_after_n_actions
    
-   # @todo Change this!
-   attr_accessor :players
+   attr_reader :players
    
-   # @return [Array<Array<Integer>>] The sequence of seats that acted, separated by round, or +nil+ if no actions have been taken.
+   # @return [Array<Array<Integer>>] The sequence of seats that acted,
+   #  separated by round.
    attr_reader :player_acting_sequence
    
    attr_reader :transition
-   
-   attr_reader :blinds
    
    alias_new :seat_players
    
@@ -32,13 +30,8 @@ class PlayersAtTheTable
    #  relative to the dealer to act in every round.
    # @param [Array<#to_i>] blinds The blind amount payed by each player. Indices of this array
    #  represent the position relative to the dealer of the player paying the blind.
-   def initialize(players, users_seat, first_positions_relative_to_dealer,
-                  blinds)      
+   def initialize(players, users_seat, game_def)      
       @players = sanity_check_players players
-      
-      @first_positions_relative_to_dealer = sanity_check_first_positions first_positions_relative_to_dealer
-      
-      @blinds = sanity_check_blinds blinds
       
       @users_seat = if users_seat.seat_in_bounds?(number_of_players) && @players.any?{|player| player.seat == users_seat}
          users_seat
@@ -46,11 +39,15 @@ class PlayersAtTheTable
          raise UsersSeatOutOfBounds, @users_seat
       end
       
-      @initial_stacks = @players.map { |player| player.chip_stack }
+      @game_def = game_def
       
       @transition = MatchStateTransition.new
       
       remember_active_players!
+   end
+   
+   def blinds
+      @game_def.blinds
    end
    
    # @return [Integer] The number of players seated at the table.
@@ -63,7 +60,7 @@ class PlayersAtTheTable
          
          if @transition.initial_state?
             start_new_hand!
-         else
+         else            
             update_state_of_players!
             
             @player_acting_sequence.last << player_who_acted_last.seat
@@ -132,7 +129,7 @@ class PlayersAtTheTable
    # @return [Hash<Player, #to_i] Relation from player to the blind that player paid.
    def player_blind_relation
       @players.inject({}) do |relation, player|
-         relation[player] = @blinds[position_relative_to_dealer(player)]
+         relation[player] = blinds[position_relative_to_dealer(player)]
          relation
       end
    end
@@ -140,6 +137,32 @@ class PlayersAtTheTable
    # @return [String] player acting sequence as a string.
    def player_acting_sequence_string
       (@player_acting_sequence.map { |per_round| per_round.join('') }).join('/')
+   end
+   
+   def betting_sequence_string
+      (betting_sequence.map do |per_round|
+         (per_round.map{|action| action.to_acpc}).join('')
+      end).join('/')
+   end
+   
+   def betting_sequence
+      sequence = [[]]
+      @player_acting_sequence.each_index do |i|
+         per_round = @player_acting_sequence[i]
+         
+         actions_taken_this_round = {}
+         @players.each do |player|
+            actions_taken_this_round[player.seat] = player.actions_taken_this_hand[i].dup
+         end
+         
+         per_round.each_index do |j|
+            seat = per_round[j]
+            
+            sequence.last << actions_taken_this_round[seat].shift
+         end
+         sequence << [] if (@transition.next_state.round+1) > sequence.length
+      end
+      sequence
    end
    
    # @return [Boolean] +true+ if it is the user's turn to act, +false+ otherwise.
@@ -156,9 +179,14 @@ class PlayersAtTheTable
       @players.map { |player| player.chip_stack }
    end
    
-   # return [Integer] The list containing each player's current chip balance.
+   # return [Array<Integer>] Each player's current chip balance.
    def chip_balances
       @players.map { |player| player.chip_balance }
+   end
+   
+   # return [Array<Array<Integer>>] Each player's current chip contribution organized by round.
+   def chip_contributions
+      @players.map { |player| player.chip_contribution }
    end
    
    # @param [Integer] player The player of which the position relative to the
@@ -189,6 +217,26 @@ class PlayersAtTheTable
       player.seat.position_relative_to seat_of_dealer, number_of_players
    end
    
+   def amount_to_call(player)
+      largest_contribution = @players.map do |p|
+         p.chip_contribution_over_hand
+      end.max - player.chip_contribution_over_hand
+   end
+   
+   def cost_of_action(player, action, round=round_in_which_last_action_taken)
+      if action.to_sym == :call
+         amount_to_call player
+      elsif action.to_sym == :bet || action.to_sym == :raise
+         if action.modifier
+            action.modifier - player.chip_contribution_over_hand
+         else
+            @game_def.min_wagers[round] + amount_to_call(player)
+         end
+      else
+         0
+      end
+   end
+   
    # @return [Set] The set of legal actions for the currently acting player.
    #def legal_actions
    #   list_of_action_symbols = if acting_player_sees_wager?
@@ -210,7 +258,7 @@ class PlayersAtTheTable
    
    def remember_active_players!() @active_players_before_update = active_players.dup end
    
-   def round_in_which_last_action_taken(state)
+   def round_in_which_last_action_taken(state=@transition.next_state)
       if state.round != 0 && state.number_of_actions_this_round < 1
          state.round - 1
       else
@@ -270,9 +318,9 @@ class PlayersAtTheTable
       return nil if players_who_could_act.empty?
       
       begin
-         position_relative_to_dealer_to_act = (@first_positions_relative_to_dealer[round] + n) % number_of_players
+         position_relative_to_dealer_to_act = (@game_def.first_positions_relative_to_dealer[round] + n) % number_of_players
       rescue
-         raise InsufficientFirstPositionsProvided, round - (@first_positions_relative_to_dealer.length - 1)
+         raise InsufficientFirstPositionsProvided, round - (@game_def.first_positions_relative_to_dealer.length - 1)
       end
       
       player_to_act = players_who_could_act.find do |player|
@@ -291,8 +339,8 @@ class PlayersAtTheTable
          player = @players[i]
 
          player.start_new_hand!(
-            @blinds[position_relative_to_dealer(player)],
-            @initial_stacks[i], # @todo if @is_doyles_game
+            blinds[position_relative_to_dealer(player)],
+            @game_def.chip_stacks[position_relative_to_dealer(player)], # @todo if playing Doyle's game
             @transition.next_state.list_of_hole_card_hands[position_relative_to_dealer(player)]
          )
       end
@@ -307,10 +355,25 @@ class PlayersAtTheTable
    def update_state_of_players!
       assign_hole_cards_to_players!
       
-      player_who_acted_last.take_action! @transition.next_state.last_action
+      action_with_context = PokerAction.new(
+         @transition.next_state.last_action.to_acpc,
+         cost_of_action(player_who_acted_last,
+                        @transition.next_state.last_action),
+         nil,
+         (amount_to_call(player_who_acted_last) > 0 ||
+            (blinds[position_relative_to_dealer(player_who_acted_last)] > 0 &&
+               player_who_acted_last.actions_taken_this_hand[0].length < 1
+            )
+         )
+      )
+      player_who_acted_last.take_action! action_with_context
       
       if @transition.new_round?
          @players.each { |player| player.start_new_round! }
+      end
+      
+      if hand_ended?
+         # @todo Take new action and evaluate end of hand if necessary
       end
    end
    

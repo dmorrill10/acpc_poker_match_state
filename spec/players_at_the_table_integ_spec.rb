@@ -3,6 +3,7 @@ require File.expand_path('../support/spec_helper', __FILE__)
 
 # Gems
 require 'acpc_poker_types/types/player'
+require 'acpc_poker_types/types/game_definition'
 
 # Local modules
 require File.expand_path('../support/dealer_data', __FILE__)
@@ -56,9 +57,16 @@ describe PlayersAtTheTable do
                   @user_player = @players[users_seat]
                   @opponents = @players.select { |player| !player.eql?(@user_player) }
                   
+                  game_def = mock 'GameDefinition'
+                  game_def.stubs(:first_positions_relative_to_dealer).returns(first_positions_relative_to_dealer)
+                  #game_def.stubs(:number_of_players).returns(num_players)
+                  game_def.stubs(:blinds).returns(blinds)
+                  game_def.stubs(:chip_stacks).returns(@players.map { |player| player.chip_stack })
+                  game_def.stubs(:min_wagers).returns(small_bets)
+                  
                   # Initialize patient
                   @patient = PlayersAtTheTable.seat_players @players, users_seat,
-                     first_positions_relative_to_dealer, blinds
+                     game_def
                   
                   # Sample the dealer match string and action data
                   number_of_states = 200
@@ -100,36 +108,58 @@ describe PlayersAtTheTable do
                         # Adjust stacks and balances
                         @chip_stacks = []
                         @players.each_index { |j| @chip_stacks << stack_size }
+                        @chip_contributions = []
                         @chip_stacks.each_index do |j|
                            @chip_stacks[j] -= blinds[positions_relative_to_dealer[j]]
                            @chip_balances[j] -= blinds[positions_relative_to_dealer[j]]
-                        end
+                           @chip_contributions << []
+                           @chip_contributions[j] << blinds[positions_relative_to_dealer[j]]
+                        end 
                      else
+                        @betting_sequence << [] if @betting_sequence.empty?
+                        @player_acting_sequence << [] if @player_acting_sequence.empty?
+                        
                         seat_taking_action = from_player_message.keys.first
-                        
-                        @last_action = PokerAction.new from_player_message[seat_taking_action]
-                        
-                        #@todo Adjust stacks and balances based on last action
                         seat_of_last_player_to_act = seat_taking_action.to_i - 1
-                        
                         @player_who_acted_last = @players[seat_of_last_player_to_act]
                         
-                        @player_acting_sequence << [] if @player_acting_sequence.empty?
+                        @last_action = PokerAction.new(from_player_message[seat_taking_action],
+                           @patient.cost_of_action(@player_who_acted_last,
+                              PokerAction.new(from_player_message[seat_taking_action]),
+                              (@betting_sequence.length - 1)
+                           ),
+                           nil,
+                           (@patient.amount_to_call(@player_who_acted_last) > 0 ||
+                              (blinds[positions_relative_to_dealer[seat_of_last_player_to_act]] > 0 &&
+                                 @player_who_acted_last.actions_taken_this_hand[0].length < 1
+                              )
+                           )
+                        )
+                        
+                        @chip_contributions[seat_of_last_player_to_act][-1] += @last_action.amount_to_put_in_pot
+                        @chip_stacks[seat_of_last_player_to_act] -= @last_action.amount_to_put_in_pot
+                        @chip_balances[seat_of_last_player_to_act] -= @last_action.amount_to_put_in_pot
+                        
+                        #@todo Check final balance
+                        
                         @player_acting_sequence.last << seat_of_last_player_to_act
                         @player_acting_sequence_string += seat_of_last_player_to_act.to_s
-                        @betting_sequence << [] if @betting_sequence.empty?
                         @betting_sequence.last << @last_action
                         @betting_sequence_string += @last_action.to_acpc
+                        
+                        if @match_state.round != prev_round
+                           @player_acting_sequence_string += '/'
+                           @betting_sequence_string += '/'
+                           @chip_contributions.each do |contribution|
+                              contribution << 0
+                           end
+                        end
                      end
-
+                     
                      # Update values if the round or hand has changed
                      if @match_state.round != prev_round || @match_state.first_state_of_first_round?
                         @player_acting_sequence << []
                         @betting_sequence << []
-                     end
-                     if @match_state.round != prev_round && !@match_state.first_state_of_first_round?
-                        @player_acting_sequence_string += '/'
-                        @betting_sequence_string += '/'
                      end
 
                      # Update the patient
@@ -206,7 +236,7 @@ describe PlayersAtTheTable do
       @patient.chip_balances.should == @chip_balances
       @patient.betting_sequence.should == @betting_sequence
       @patient.betting_sequence_string.should == @betting_sequence_string
-      #@patient.chip_contributions.should == @chip_contributions
+      @patient.chip_contributions.should == @chip_contributions
       #@patient.chip_balance_over_hand.should == @chip_balance_over_hand
       #@patient.match_state_string.should == @match_state
    end
