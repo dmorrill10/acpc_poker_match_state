@@ -17,11 +17,15 @@ describe PlayersAtTheTable do
    GAME_DEFS = {
       limit: {
          stack_size: 400, small_bets: [2, 2, 4, 4],
-         first_positions_relative_to_dealer: [1, 0, 0, 0]
+         first_positions_relative_to_dealer: [1, 0, 0, 0],
+         blinds: [2, 1],
+         number_of_hands: 100
       },
       nolimit: {
          stack_size: 20000, small_bets: [100, 100, 100, 100],
-         first_positions_relative_to_dealer: [1, 0, 0, 0]
+         first_positions_relative_to_dealer: [1, 0, 0, 0],
+         blinds: [100, 50],
+         number_of_hands: 100
       }
    }
    
@@ -31,15 +35,14 @@ describe PlayersAtTheTable do
          DealerData::DATA.each do |num_players, data_by_num_players|
             @number_of_players = num_players
             ((0..(num_players-1)).map{ |i| (i+1).to_s }).each do |seat|
+               hand_num = 0
                data_by_num_players.each do |type, data_by_type|
                   turns = data_by_type[:actions]
                   
                   # Data from game def
                   stack_size = GAME_DEFS[type][:stack_size]
                   small_bets = GAME_DEFS[type][:small_bets]
-                  big_blind = small_bets.first
-                  small_blind = big_blind/2
-                  blinds = [big_blind, small_blind]
+                  blinds = GAME_DEFS[type][:blinds]
                   while blinds.length < num_players
                      blinds << 0
                   end
@@ -160,16 +163,31 @@ describe PlayersAtTheTable do
                         @betting_sequence << []
                      end
                      
-                     #@todo Check final balance
-                     if !next_turn || MatchStateString.parse(next_turn[:to_players]['1']).first_state_of_first_round?
-                        result = data_by_type[:results][i]
+                     if !next_turn || MatchStateString.parse(next_turn[:to_players]['1']).first_state_of_first_round?                        
+                        result = data_by_type[:results][hand_num]
+                        
+                        puts "hand_num: #{hand_num}, result: #{result}"
+                        
+                        hand_num += 1
+                        
                         result.each do |player_name, final_balance|
                            # @todo This assumption isn't robust
                            player = @players.find { |p| p.name == player_name }
                            
-                           @chip_balances[player.seat] = final_balance.to_i
+                           # @todo Only in Doyle's game
                            @chip_stacks[player.seat] = game_def.chip_stacks[positions_relative_to_dealer[player.seat]] + final_balance.to_i
-                           @chip_contributions[player.seat][-1] = final_balance.to_i
+                           
+                           contribution_over_this_hand = @chip_contributions[player.seat].sum
+                           if final_balance.to_i > -contribution_over_this_hand
+                              @chip_contributions[player.seat][-1] -= num_players * final_balance.to_i
+                              @chip_balances[player.seat] += num_players * final_balance.to_i
+                              
+                              
+                           end
+                           
+                           puts "player: #{player}, final_balance: #{final_balance}, chip_balances: #{@chip_balances}, " +
+                              "chip_stacks: #{@chip_stacks}, chip_contributions: #{@chip_contributions}"
+                           
                         end
                      end
                      

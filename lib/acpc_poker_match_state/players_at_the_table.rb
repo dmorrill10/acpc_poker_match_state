@@ -373,8 +373,44 @@ class PlayersAtTheTable
       end
       
       if hand_ended?
-         # @todo Take new action and evaluate end of hand if necessary
+         distribute_chips! @transition.next_state.board_cards
       end
+   end
+   
+   # Distribute chips to all winning players
+   # @param [BoardCards] board_cards The community board cards.
+   def distribute_chips!(board_cards)
+      raise NoChipsToDistribute unless pot > 0
+      raise NoPlayersToTakeChips unless non_folded_players.length > 0
+      
+      if 1 == non_folded_players.length
+         non_folded_players.first.take_winnings! pot
+      else
+         players_and_their_hand_strength = {}
+         non_folded_players.each do |player|
+            hand_strength = PileOfCards.new(board_cards.flatten + player.hole_cards).to_poker_hand_strength
+            
+            players_and_their_hand_strength[player] = hand_strength
+         end
+         
+         strength_of_strongest_hand = players_and_their_hand_strength.values.max
+         winning_players = players_and_their_hand_strength.find_all do |player, hand_strength|
+            hand_strength == strength_of_strongest_hand
+         end.map { |player_with_hand_strength| player_with_hand_strength.first }
+         
+         amount_each_player_wins = (pot/winning_players.length).floor
+         winning_players.each do |player|
+            player.take_winnings! amount_each_player_wins
+         end
+         
+         # @todo Keep track of chips remaining in the pot after splitting them if multiplayer
+         #@value -= (amount_each_player_wins * winning_players.length).to_i
+      end
+   end
+   
+   # @todo This only works for Doyle's game.
+   def pot
+      chip_contributions.mapped_sum.sum
    end
    
    #def amounts_to_call
