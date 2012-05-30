@@ -28,7 +28,7 @@ class PlayersAtTheTable
    
    # @param [Array<Player>] players The players to seat at the table.
    # @param [Integer] users_seat The user's seat at the table.
-   # @param [Array<Integer>] game_def The game definition for the match these
+   # @param [GameDefinition] game_def The game definition for the match these
    #  players are joining.
    # @param [Integer] number_of_hands The number of hands in this match.
    def initialize(players, users_seat, game_def, number_of_hands)
