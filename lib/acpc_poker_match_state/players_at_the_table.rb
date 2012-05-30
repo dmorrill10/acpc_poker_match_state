@@ -11,8 +11,8 @@ class PlayersAtTheTable
    
    exceptions :player_acted_before_sitting_at_table,
       :no_players_to_seat, :users_seat_out_of_bounds,
-      :multiple_players_have_the_same_seat, :insufficient_first_positions_provided,
-      :first_position_out_of_bounds, :no_player_to_act_after_n_actions
+      :multiple_players_have_the_same_seat,
+      :no_player_to_act_after_n_actions
    
    attr_reader :players
    
@@ -304,31 +304,6 @@ class PlayersAtTheTable
       raise MultiplePlayersHaveTheSameSeat if players.uniq!{ |player| player.seat }
       
       players
-   end
-   
-   def sanity_check_first_positions(first_positions_relative_to_dealer)
-      raise InsufficientFirstPositionsProvided, 1 if first_positions_relative_to_dealer.empty?
-      
-      out_of_bounds_first_position = first_positions_relative_to_dealer.find do |position|
-         !position.seat_in_bounds?(number_of_players)
-      end
-         
-      if out_of_bounds_first_position
-         raise FirstPositionOutOfBounds, out_of_bounds_first_position.to_s
-      end
-      
-      first_positions_relative_to_dealer
-   end
-   
-   def sanity_check_blinds(blinds)
-      while blinds.length > number_of_players
-         blinds.pop
-      end
-      while blinds.length < number_of_players
-         blinds << 0
-      end
-      
-      blinds
    end
    
    # @param [Integer] n A number of actions.

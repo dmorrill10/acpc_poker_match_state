@@ -1,6 +1,8 @@
 
 require File.expand_path('../support/spec_helper', __FILE__)
 
+require 'acpc_poker_types/types/game_definition'
+
 require File.expand_path('../../lib/acpc_poker_match_state/players_at_the_table', __FILE__)
 
 describe PlayersAtTheTable do
@@ -14,7 +16,8 @@ describe PlayersAtTheTable do
             it 'that is empty' do
                expect do
                   PlayersAtTheTable.seat_players(
-                     [], 0, first_positions_relative_to_dealer(1), blinds(0))
+                     [], 0, mock('GameDefinition'), 1
+                  )
                end.to raise_exception(PlayersAtTheTable::NoPlayersToSeat)
             end
             describe 'where at least one player' do
@@ -25,8 +28,8 @@ describe PlayersAtTheTable do
                      player_list[0].stubs(:actions_taken_this_hand).returns([[mock('Action')]])
                      expect do
                         PlayersAtTheTable.seat_players(
-                           player_list, 0, first_positions_relative_to_dealer(1),
-                           blinds(player_list.length))
+                           player_list, 0, mock('GameDefinition'), 1
+                        )
                      end.to raise_exception(PlayersAtTheTable::PlayerActedBeforeSittingAtTable)
                   end
                end
@@ -40,8 +43,7 @@ describe PlayersAtTheTable do
                      
                      expect do
                         PlayersAtTheTable.seat_players(
-                           player_list, 0, first_positions_relative_to_dealer(1),
-                           blinds(player_list.length)
+                           player_list, 0, mock('GameDefinition'), 1
                         )
                      end.to raise_exception(PlayersAtTheTable::MultiplePlayersHaveTheSameSeat)
                   end
@@ -55,8 +57,8 @@ describe PlayersAtTheTable do
                   expect do
                      PlayersAtTheTable.seat_players(
                         player_list, out_of_bounds_seat,
-                        first_positions_relative_to_dealer(1),
-                        blinds(player_list.length))
+                        mock('GameDefinition'), 1
+                     )
                   end.to raise_exception(PlayersAtTheTable::UsersSeatOutOfBounds)
                end
                player_list = init_two_player_list
@@ -68,32 +70,9 @@ describe PlayersAtTheTable do
                   
                expect do
                   PlayersAtTheTable.seat_players(
-                     player_list, 0, first_positions_relative_to_dealer(1),
-                     blinds(player_list.length))
+                     player_list, 0, mock('GameDefinition'), 1
+                  )
                end.to raise_exception(PlayersAtTheTable::UsersSeatOutOfBounds)
-            end
-         end
-         describe 'a list of first positions relative to the dealer' do
-            it 'that is empty' do
-               various_numbers_of_players do |number_of_players|
-                  player_list = init_vanilla_player_list(number_of_players)
-                  
-                  expect do
-                     PlayersAtTheTable.seat_players(player_list, 0, [],
-                                                    blinds(player_list.length))
-                  end.to raise_exception(PlayersAtTheTable::InsufficientFirstPositionsProvided)
-               end
-            end
-            it 'where a position is out of bounds' do
-               various_numbers_of_players do |number_of_players|
-                  player_list = init_vanilla_player_list(number_of_players)
-                  
-                  expect do
-                     PlayersAtTheTable.seat_players(player_list, 0,
-                                                    [player_list.length],
-                                                    blinds(player_list.length))
-                  end.to raise_exception(PlayersAtTheTable::FirstPositionOutOfBounds)
-               end
             end
          end
       end
@@ -331,11 +310,15 @@ describe PlayersAtTheTable do
          
       @initial_example = creation_example player_list, users_seat,
          example_first_positions
-         
+      
+      game_def = mock 'GameDefinition'
+      game_def.stubs(:first_positions_relative_to_dealer).returns(@initial_example.given.first_positions_relative_to_dealer)
+      game_def.stubs(:blinds).returns(@initial_example.given.blinds)
+      
       @patient = PlayersAtTheTable.seat_players(
          @initial_example.given.players, @initial_example.given.users_seat,
-         @initial_example.given.first_positions_relative_to_dealer,
-         @initial_example.given.blinds)
+         game_def, 1
+      )
          
       check_patient @initial_example.then
          
