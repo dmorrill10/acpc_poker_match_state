@@ -35,9 +35,13 @@ describe PlayersAtTheTable do
          DealerData::DATA.each do |num_players, data_by_num_players|
             @number_of_players = num_players
             ((0..(num_players-1)).map{ |i| (i+1).to_s }).each do |seat|
-               hand_num = 0
                data_by_num_players.each do |type, data_by_type|
                   turns = data_by_type[:actions]
+                  
+                  hand_num = 0
+                  @match_ended = false
+                  @last_hands_balance = []
+                  num_players.times { |i| @last_hands_balance << 0 }
                   
                   # Data from game def
                   stack_size = GAME_DEFS[type][:stack_size]
@@ -48,6 +52,7 @@ describe PlayersAtTheTable do
                   end
                   first_positions_relative_to_dealer = GAME_DEFS[type][:first_positions_relative_to_dealer]
                   users_seat = seat.to_i - 1
+                  number_of_hands = GAME_DEFS[type][:number_of_hands]
                   
                   # Setup players
                   @players = []
@@ -56,7 +61,7 @@ describe PlayersAtTheTable do
                      player_seat = i
                      @players << Player.join_match(name, player_seat, stack_size)
                   end
-                  @chip_balances = @players.map { |player| player.chip_balance }
+                  @chip_balances = @players.map { |player| player.chip_balance.to_i }
                   @user_player = @players[users_seat]
                   @opponents = @players.select { |player| !player.eql?(@user_player) }
                   
@@ -69,11 +74,13 @@ describe PlayersAtTheTable do
                   
                   # Initialize patient
                   @patient = PlayersAtTheTable.seat_players @players, users_seat,
-                     game_def
+                     game_def, number_of_hands
                   
                   # Sample the dealer match string and action data
-                  number_of_states = 200
-                  number_of_states.times do |i|
+                  turns.each_index do |i|
+                     # @todo Won't be needed once data is separated better by game def
+                     next if @match_ended
+                     
                      turn = turns[i]
                      next_turn = turns[i + 1]
                      
@@ -139,9 +146,9 @@ describe PlayersAtTheTable do
                            )
                         )
                         
-                        @chip_contributions[seat_of_last_player_to_act][-1] += @last_action.amount_to_put_in_pot
+                        @chip_contributions[seat_of_last_player_to_act][-1] += @last_action.amount_to_put_in_pot.to_i
                         @chip_stacks[seat_of_last_player_to_act] -= @last_action.amount_to_put_in_pot
-                        @chip_balances[seat_of_last_player_to_act] -= @last_action.amount_to_put_in_pot
+                        @chip_balances[seat_of_last_player_to_act] -= @last_action.amount_to_put_in_pot.to_i
                         
                         @player_acting_sequence.last << seat_of_last_player_to_act
                         @player_acting_sequence_string += seat_of_last_player_to_act.to_s
@@ -163,10 +170,10 @@ describe PlayersAtTheTable do
                         @betting_sequence << []
                      end
                      
+                     @last_hand = ((number_of_hands - 1) == hand_num)
+                     
                      if !next_turn || MatchStateString.parse(next_turn[:to_players]['1']).first_state_of_first_round?                        
                         result = data_by_type[:results][hand_num]
-                        
-                        puts "hand_num: #{hand_num}, result: #{result}"
                         
                         hand_num += 1
                         
@@ -175,19 +182,20 @@ describe PlayersAtTheTable do
                            player = @players.find { |p| p.name == player_name }
                            
                            # @todo Only in Doyle's game
-                           @chip_stacks[player.seat] = game_def.chip_stacks[positions_relative_to_dealer[player.seat]] + final_balance.to_i
+                           @chip_stacks[player.seat] = game_def.chip_stacks[positions_relative_to_dealer[player.seat]].to_i + final_balance.to_i
                            
-                           contribution_over_this_hand = @chip_contributions[player.seat].sum
-                           if final_balance.to_i > -contribution_over_this_hand
-                              @chip_contributions[player.seat][-1] -= num_players * final_balance.to_i
-                              @chip_balances[player.seat] += num_players * final_balance.to_i
+                           # @todo Assumes Doyle's game in three player
+                           if final_balance.to_i == 0
+                              @chip_balances[player.seat] = @last_hands_balance[player.seat].to_i
+                              @chip_contributions[player.seat][-1] -= @chip_contributions[player.seat].sum
+                           elsif final_balance.to_i > 0
+                              @chip_balances[player.seat] = @last_hands_balance[player.seat].to_i + final_balance.to_i
                               
-                              
+                              contribution_over_this_hand = @chip_contributions[player.seat].sum
+                              @chip_contributions[player.seat][-1] -= @chip_contributions.mapped_sum.sum
                            end
                            
-                           puts "player: #{player}, final_balance: #{final_balance}, chip_balances: #{@chip_balances}, " +
-                              "chip_stacks: #{@chip_stacks}, chip_contributions: #{@chip_contributions}"
-                           
+                           @last_hands_balance[player.seat] = @chip_balances[player.seat]
                         end
                      end
                      
@@ -201,6 +209,7 @@ describe PlayersAtTheTable do
                      @reached_showdown = @opponents_cards_visible
                      @less_than_two_non_folded_players = @non_folded_players.length < 2
                      @hand_ended = @less_than_two_non_folded_players || @reached_showdown
+                     @match_ended = @hand_ended && @last_hand
                      @player_with_dealer_button = nil
                      @players.each_index do |j|
                         if positions_relative_to_dealer[j] == @players.length - 1
@@ -257,6 +266,8 @@ describe PlayersAtTheTable do
       @patient.reached_showdown?.should == @reached_showdown
       @patient.less_than_two_non_folded_players?.should == @less_than_two_non_folded_players                     
       @patient.hand_ended?.should == @hand_ended
+      @patient.last_hand?.should == @last_hand
+      @patient.match_ended?.should == @match_ended
       @patient.player_with_dealer_button.should == @player_with_dealer_button
       @patient.player_blind_relation.should == @player_blind_relation
       @patient.player_acting_sequence_string.should == @player_acting_sequence_string

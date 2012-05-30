@@ -22,15 +22,16 @@ class PlayersAtTheTable
    
    attr_reader :transition
    
+   attr_reader :number_of_hands
+   
    alias_new :seat_players
    
    # @param [Array<Player>] players The players to seat at the table.
    # @param [Integer] users_seat The user's seat at the table.
-   # @param [Array<Integer>] first_positions_relative_to_dealer The first position
-   #  relative to the dealer to act in every round.
-   # @param [Array<#to_i>] blinds The blind amount payed by each player. Indices of this array
-   #  represent the position relative to the dealer of the player paying the blind.
-   def initialize(players, users_seat, game_def)      
+   # @param [Array<Integer>] game_def The game definition for the match these
+   #  players are joining.
+   # @param [Integer] number_of_hands The number of hands in this match.
+   def initialize(players, users_seat, game_def, number_of_hands)
       @players = sanity_check_players players
       
       @users_seat = if users_seat.seat_in_bounds?(number_of_players) && @players.any?{|player| player.seat == users_seat}
@@ -44,6 +45,8 @@ class PlayersAtTheTable
       @transition = MatchStateTransition.new
       
       remember_active_players!
+      
+      @number_of_hands = number_of_hands
    end
    
    def blinds
@@ -106,6 +109,11 @@ class PlayersAtTheTable
    # @return [Boolean] +true+ if the hand has ended, +false+ otherwise.
    def hand_ended?
       less_than_two_non_folded_players? || reached_showdown?
+   end
+   
+   # @return [Boolean] +true+ if the match has ended, +false+ otherwise.
+   def match_ended?
+      hand_ended? && last_hand?
    end
    
    def less_than_two_non_folded_players?   
@@ -224,7 +232,7 @@ class PlayersAtTheTable
    end
    
    def cost_of_action(player, action, round=round_in_which_last_action_taken)
-      if action.to_sym == :call
+      ChipStack.new(if action.to_sym == :call
          amount_to_call player
       elsif action.to_sym == :bet || action.to_sym == :raise
          if action.modifier
@@ -234,25 +242,42 @@ class PlayersAtTheTable
          end
       else
          0
-      end
+      end)
    end
    
    # @return [Set] The set of legal actions for the currently acting player.
-   #def legal_actions
-   #   list_of_action_symbols = if acting_player_sees_wager?
-   #      [:call, :fold, :raise]
-   #   elsif acting_player_contributed_to_the_pot_this_round?
-   #      [:check, :raise]
-   #   else
-   #      [:check, :bet]
-   #   end
-   #   
-   #   list_of_action_symbols.inject(Set.new) do |set, action_symbol|
-   #      set << PokerAction.new(action_symbol)
-   #   end
-   #end
+   def legal_actions
+      list_of_action_symbols = if player_sees_wager?
+         [:call, :fold, :raise]
+      elsif player_contributed_to_pot_this_round?
+         [:check, :raise]
+      else
+         [:check, :bet]
+      end
+      
+      list_of_action_symbols.inject(Set.new) do |set, action_symbol|
+         set << PokerAction.new(action_symbol)
+      end
+   end
+   
+   # @return [Boolean] +true+ if the current hand is the last in the match.
+   def last_hand?
+      # @todo make sure +@match_state_string.hand_number+ is not greater than @number_of_hands
+      @transition.next_state.hand_number == @number_of_hands - 1
+   end
    
    private
+   
+   def player_contributed_to_pot_this_round?(player=next_player_to_act)
+      player.contribution.last > 0
+   end
+   
+   def player_sees_wager?(player=next_player_to_act)
+      amount_to_call(player) > 0 ||
+         (blinds[position_relative_to_dealer(player)] > 0 &&
+            player.actions_taken_this_hand[0].length < 1
+         )
+   end
    
    def users_position_relative_to_dealer() @transition.next_state.position_relative_to_dealer end
    
@@ -360,11 +385,7 @@ class PlayersAtTheTable
          cost_of_action(player_who_acted_last,
                         @transition.next_state.last_action),
          nil,
-         (amount_to_call(player_who_acted_last) > 0 ||
-            (blinds[position_relative_to_dealer(player_who_acted_last)] > 0 &&
-               player_who_acted_last.actions_taken_this_hand[0].length < 1
-            )
-         )
+         player_sees_wager?(player_who_acted_last)
       )
       player_who_acted_last.take_action! action_with_context
       
@@ -408,36 +429,10 @@ class PlayersAtTheTable
       end
    end
    
-   # @todo This only works for Doyle's game.
+   # @todo This only works for Doyle's game where there are no side-pots.
    def pot
       chip_contributions.mapped_sum.sum
    end
-   
-   #def amounts_to_call
-   #   @players.inject({}) do |hash, player|
-   #      hash[player.name] = @pot.amount_to_call(player).to_i
-   #      hash
-   #   end
-   #end
-   
-   # @return [Boolean] +true+ if the match has ended, +false+ otherwise.
-   #def match_ended?      
-   #   hand_ended? && last_hand?
-   #end
-   
-   # @return [Boolean] +true+ if the current hand is the last in the match.
-   #def last_hand?
-   #   # @todo make sure +@match_state_string.hand_number+ is not greater than @number_of_hands
-   #   @match_state_string.hand_number == @number_of_hands - 1
-   #end
-
-   #def is_reverse_blinds?
-   #   2 == @game_definition.number_of_players
-   #end
-   
-   #def last_round?
-   #   @game_definition.number_of_rounds - 1 == @match_state_string.round 
-   #end
 end
 
 class Array
