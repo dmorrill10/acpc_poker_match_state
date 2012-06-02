@@ -24,15 +24,21 @@ class PlayersAtTheTable
    
    attr_reader :number_of_hands
    
+   attr_reader :game_def
+   
+   attr_reader :users_seat
+   
    alias_new :seat_players
    
-   # @param [Array<Player>] players The players to seat at the table.
+   # @param [GameDefinition] game_def The game definition for the
+   #  match these players are playing.
+   # @param [Array<String>] player_names The names of the players to seat at the table.
    # @param [Integer] users_seat The user's seat at the table.
-   # @param [GameDefinition] game_def The game definition for the match these
    #  players are joining.
    # @param [Integer] number_of_hands The number of hands in this match.
-   def initialize(players, users_seat, game_def, number_of_hands)
-      @players = sanity_check_players players
+   def initialize(game_def, player_names, users_seat,
+                  number_of_hands)
+      @players = Player.create_players player_names, game_def
       
       @users_seat = if users_seat.seat_in_bounds?(number_of_players) && @players.any?{|player| player.seat == users_seat}
          users_seat
@@ -273,10 +279,10 @@ class PlayersAtTheTable
    end
    
    def player_sees_wager?(player=next_player_to_act)
-      amount_to_call(player) > 0 ||
-         (blinds[position_relative_to_dealer(player)] > 0 &&
+      amount_to_call(player) > 0 || (
+         blinds[position_relative_to_dealer(player)] > 0 &&
             player.actions_taken_this_hand[0].length < 1
-         )
+      )
    end
    
    def users_position_relative_to_dealer() @transition.next_state.position_relative_to_dealer end
@@ -289,21 +295,6 @@ class PlayersAtTheTable
       else
          state.round
       end
-   end
-   
-   def sanity_check_players(players)
-      raise NoPlayersToSeat if players.empty?
-      players.each do |player|
-         if player.actions_taken_this_hand && player.actions_taken_this_hand.any? do |actions_in_round|
-               !actions_in_round.empty?
-            end
-            raise PlayerActedBeforeSittingAtTable
-         end
-      end
-      
-      raise MultiplePlayersHaveTheSameSeat if players.uniq!{ |player| player.seat }
-      
-      players
    end
    
    # @param [Integer] n A number of actions.
@@ -408,6 +399,11 @@ class PlayersAtTheTable
    def pot
       chip_contributions.mapped_sum.sum
    end
+   
+   def copy_data!(data_hash)
+      @transition = data_hash[:transition].clone
+      @players = data_hash[:players].copy
+   end
 end
 
 class Array
@@ -415,5 +411,8 @@ class Array
       self.find do |position|
          !position.seat_in_bounds?(number_of_players)
       end
+   end
+   def copy
+      inject([]) { |new_array, elem| new_array << elem.copy }
    end
 end

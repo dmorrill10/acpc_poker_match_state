@@ -29,7 +29,7 @@ describe PlayersAtTheTable do
       }
    }
    
-   describe '#update!' do
+   describe '#update! and ::copy' do
       it "keeps track of state for a sequence of match states and actions in Doyle's game" do
          # @todo Move into data retrieval method
          DealerData::DATA.each do |num_players, data_by_num_players|
@@ -44,8 +44,16 @@ describe PlayersAtTheTable do
                   
                   game_def = init_game_def type, @players
                   
-                  @patient = PlayersAtTheTable.seat_players @players, users_seat,
-                     game_def, GAME_DEFS[type][:number_of_hands]
+                  Player.stubs(:create_players).with(
+                     @players.map{|p| p.name}, game_def
+                  ).returns(@players)
+                  
+                  @patient = PlayersAtTheTable.seat_players(
+                     game_def,
+                     (@players.map{ |player| player.name }),
+                     users_seat,
+                     GAME_DEFS[type][:number_of_hands]
+                  )
                   
                   turns.each_index do |i|
                      # @todo Won't be needed once data is separated better by game def
@@ -181,7 +189,6 @@ describe PlayersAtTheTable do
             contribution << 0
          end
       end
-      
    end
    def init_new_hand_data!(type)
       @player_who_acted_last = nil
@@ -255,32 +262,32 @@ describe PlayersAtTheTable do
       game_def.stubs(:min_wagers).returns(GAME_DEFS[type][:small_bets])
       game_def
    end
-   def check_patient
-      @patient.player_acting_sequence.should == @player_acting_sequence
-      @patient.number_of_players.should == @number_of_players
-      @patient.player_who_acted_last.should be @player_who_acted_last
-      @patient.next_player_to_act.should be @next_player_to_act
-      (@patient.players.map { |player| player.hole_cards }).should == @hole_card_hands
-      @patient.user_player.should == @user_player
-      @patient.opponents.should == @opponents
-      @patient.active_players.should == @active_players
-      @patient.non_folded_players.should == @non_folded_players
-      @patient.opponents_cards_visible?.should == @opponents_cards_visible
-      @patient.reached_showdown?.should == @reached_showdown
-      @patient.less_than_two_non_folded_players?.should == @less_than_two_non_folded_players                     
-      @patient.hand_ended?.should == @hand_ended
-      @patient.last_hand?.should == @last_hand
-      @patient.match_ended?.should == @match_ended
-      @patient.player_with_dealer_button.should == @player_with_dealer_button
-      @patient.player_blind_relation.should == @player_blind_relation
-      @patient.player_acting_sequence_string.should == @player_acting_sequence_string
-      @patient.users_turn_to_act?.should == @users_turn_to_act
-      @patient.chip_stacks.should == @chip_stacks
-      @patient.chip_balances.should == @chip_balances
-      @patient.betting_sequence.should == @betting_sequence
-      @patient.betting_sequence_string.should == @betting_sequence_string
-      @patient.chip_contributions.should == @chip_contributions
-      #@patient.chip_balance_over_hand.should == @chip_balance_over_hand
-      #@patient.match_state_string.should == @match_state
+   def check_patient(patient=@patient)
+      patient.player_acting_sequence.should == @player_acting_sequence
+      patient.number_of_players.should == @number_of_players
+      patient.player_who_acted_last.should be @player_who_acted_last
+      patient.next_player_to_act.should be @next_player_to_act
+      (patient.players.map { |player| player.hole_cards }).should == @hole_card_hands
+      patient.user_player.should == @user_player
+      patient.opponents.should == @opponents
+      patient.active_players.should == @active_players
+      patient.non_folded_players.should == @non_folded_players
+      patient.opponents_cards_visible?.should == @opponents_cards_visible
+      patient.reached_showdown?.should == @reached_showdown
+      patient.less_than_two_non_folded_players?.should == @less_than_two_non_folded_players                     
+      patient.hand_ended?.should == @hand_ended
+      patient.last_hand?.should == @last_hand
+      patient.match_ended?.should == @match_ended
+      patient.player_with_dealer_button.should == @player_with_dealer_button
+      patient.player_blind_relation.should == @player_blind_relation
+      patient.player_acting_sequence_string.should == @player_acting_sequence_string
+      patient.users_turn_to_act?.should == @users_turn_to_act
+      patient.chip_stacks.should == @chip_stacks
+      patient.chip_balances.should == @chip_balances
+      patient.betting_sequence.should == @betting_sequence
+      patient.betting_sequence_string.should == @betting_sequence_string
+      patient.chip_contributions.should == @chip_contributions
+      #patient.chip_balance_over_hand.should == @chip_balance_over_hand
+      #patient.match_state_string.should == @match_state
    end
 end

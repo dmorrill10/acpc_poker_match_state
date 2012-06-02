@@ -12,52 +12,20 @@ describe PlayersAtTheTable do
    
    describe '::seat_players' do
       describe 'raises an exception if it is given' do
-         describe 'a player list' do
-            it 'that is empty' do
-               expect do
-                  PlayersAtTheTable.seat_players(
-                     [], 0, mock('GameDefinition'), 1
-                  )
-               end.to raise_exception(PlayersAtTheTable::NoPlayersToSeat)
-            end
-            describe 'where at least one player' do
-               it 'has already acted' do
-                  various_numbers_of_players do |number_of_players|
-                     player_list = init_vanilla_player_list(number_of_players)
-                     
-                     player_list[0].stubs(:actions_taken_this_hand).returns([[mock('Action')]])
-                     expect do
-                        PlayersAtTheTable.seat_players(
-                           player_list, 0, mock('GameDefinition'), 1
-                        )
-                     end.to raise_exception(PlayersAtTheTable::PlayerActedBeforeSittingAtTable)
-                  end
-               end
-               it 'has the same seat as another' do
-                  various_numbers_of_players do |number_of_players|
-                     player_list = init_vanilla_player_list(number_of_players)
-                     
-                     next if player_list.length < 2
-                     
-                     player_list.last.stubs(:seat).returns(0)
-                     
-                     expect do
-                        PlayersAtTheTable.seat_players(
-                           player_list, 0, mock('GameDefinition'), 1
-                        )
-                     end.to raise_exception(PlayersAtTheTable::MultiplePlayersHaveTheSameSeat)
-                  end
-               end
-            end
-         end
          describe 'a user seat' do
             it 'that is out of bounds' do
                [-1, 2].each do |out_of_bounds_seat|
                   player_list = init_two_player_list
+                  game_def = mock('GameDefinition')
+                  game_def.stubs(:number_of_players).returns(player_list.length)
+                  game_def.stubs(:chip_stacks).returns(player_list.map{|p| p.chip_stack})
+                  
                   expect do
                      PlayersAtTheTable.seat_players(
-                        player_list, out_of_bounds_seat,
-                        mock('GameDefinition'), 1
+                        game_def,
+                        player_list.map{|p| p.name},
+                        out_of_bounds_seat,
+                        1
                      )
                   end.to raise_exception(PlayersAtTheTable::UsersSeatOutOfBounds)
                end
@@ -67,10 +35,15 @@ describe PlayersAtTheTable do
                   old_seat = player.seat
                   player.stubs(:seat).returns(old_seat + 1)
                end
+               
+               Player.stubs(:create_players).returns(player_list)
                   
                expect do
                   PlayersAtTheTable.seat_players(
-                     player_list, 0, mock('GameDefinition'), 1
+                     mock('GameDefinition'),
+                     player_list.map{|p| p.name},
+                     0,
+                     1
                   )
                end.to raise_exception(PlayersAtTheTable::UsersSeatOutOfBounds)
             end
@@ -315,9 +288,13 @@ describe PlayersAtTheTable do
       game_def.stubs(:first_positions_relative_to_dealer).returns(@initial_example.given.first_positions_relative_to_dealer)
       game_def.stubs(:blinds).returns(@initial_example.given.blinds)
       
+      Player.stubs(:create_players).returns(@initial_example.given.players)
+      
       @patient = PlayersAtTheTable.seat_players(
-         @initial_example.given.players, @initial_example.given.users_seat,
-         game_def, 1
+         game_def,
+         @initial_example.given.players.map{|p| p.name},
+         @initial_example.given.users_seat,
+         1
       )
          
       check_patient @initial_example.then
@@ -441,6 +418,7 @@ describe PlayersAtTheTable do
       player.stubs(:seat).returns(seat)      
       player.stubs(:chip_stack).returns(INITIAL_STACK_SIZE)
       player.stubs(:active?).returns(true)
+      player.stubs(:name).returns('player')
       
       player
    end
