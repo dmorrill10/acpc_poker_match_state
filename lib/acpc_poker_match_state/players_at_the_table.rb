@@ -132,7 +132,7 @@ class PlayersAtTheTable
    
    # @return [Boolean] +true+ if any opponents cards are visible, +false+ otherwise.
    def opponents_cards_visible?
-      opponents.any? { |player| !player.hole_cards.empty? }
+      opponents.any? { |player| player.hole_cards && !player.hole_cards.empty? }
    end
    
    # @return [Player] The player with the dealer button.
