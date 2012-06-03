@@ -349,7 +349,7 @@ describe PlayersAtTheTable do
       
       example.then.players = player_list
       example.then.round = nil
-      example.then.player_acting_sequence = nil
+      example.then.player_acting_sequence = [[]]
       example.then.number_of_players = player_list.length
       example.then.player_who_acted_last = nil
       example.then.next_player_to_act = nil

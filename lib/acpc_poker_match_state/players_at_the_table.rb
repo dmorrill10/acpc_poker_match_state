@@ -43,12 +43,14 @@ class PlayersAtTheTable
       @users_seat = if users_seat.seat_in_bounds?(number_of_players) && @players.any?{|player| player.seat == users_seat}
          users_seat
       else
-         raise UsersSeatOutOfBounds, @users_seat
+         raise UsersSeatOutOfBounds, users_seat
       end
       
       @game_def = game_def
       
       @transition = MatchStateTransition.new
+      
+      @player_acting_sequence = [[]]
       
       remember_active_players!
       
@@ -80,8 +82,10 @@ class PlayersAtTheTable
    
    # @return [Player] The player who acted last.
    def player_who_acted_last(players_who_could_act=@active_players_before_update,
-                             state=@transition.next_state)
-      return nil unless !players_who_could_act.empty? && state && state.number_of_actions_this_hand > 0
+                             state=@transition.next_state)      
+      unless !players_who_could_act.empty? && state && state.number_of_actions_this_hand > 0
+         return nil
+      end
       
       player_to_act_after_n_actions state.betting_sequence[round_in_which_last_action_taken(state)].length - 1,
          round_in_which_last_action_taken(state), players_who_could_act
@@ -137,11 +141,14 @@ class PlayersAtTheTable
    
    # @return [Player] The player with the dealer button.
    def player_with_dealer_button
+      return nil unless @transition.next_state
       @players.find { |player| position_relative_to_dealer(player) == number_of_players - 1}
    end
    
    # @return [Hash<Player, #to_i] Relation from player to the blind that player paid.
    def player_blind_relation
+      return nil unless @transition.next_state
+      
       @players.inject({}) do |relation, player|
          relation[player] = blinds[position_relative_to_dealer(player)]
          relation
@@ -161,6 +168,8 @@ class PlayersAtTheTable
    
    def betting_sequence
       sequence = [[]]
+      return sequence unless @transition.next_state
+      
       @player_acting_sequence.each_index do |i|
          per_round = @player_acting_sequence[i]
          

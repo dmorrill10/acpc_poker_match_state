@@ -55,6 +55,8 @@ describe PlayersAtTheTable do
                      GAME_DEFS[type][:number_of_hands]
                   )
                   
+                  check_patient
+                  
                   turns.each_index do |i|
                      # @todo Won't be needed once data is separated better by game def
                      next if @match_ended
@@ -219,6 +221,25 @@ describe PlayersAtTheTable do
       @chip_contributions = @players.map { |player| player.chip_contribution }
       @user_player = @players[users_seat]
       @opponents = @players.select { |player| !player.eql?(@user_player) }
+      @hole_card_hands = @players.inject([]) { |hands, player| hands << player.hole_cards }
+      @opponents_cards_visible = false
+      @reached_showdown = @opponents_cards_visible
+      @less_than_two_non_folded_players = false
+      @hand_ended = @less_than_two_non_folded_players || @reached_showdown
+      @last_hand = false
+      @match_ended = @hand_ended && @last_hand
+      @active_players = @players
+      @non_folded_players = @players
+      @player_acting_sequence = [[]]
+      @player_acting_sequence_string = ''
+      @users_turn_to_act = false
+      @chip_stacks = @players.map { |player| player.chip_stack }
+      @betting_sequence = [[]]
+      @betting_sequence_string = ''
+      @player_who_acted_last = nil
+      @next_player_to_act = nil
+      @player_with_dealer_button = nil
+      @player_blind_relation = nil
    end
    def index_of_next_player_to_act(turn) turn[:from_players].keys.first.to_i - 1 end
    def positions_relative_to_dealer
@@ -287,7 +308,5 @@ describe PlayersAtTheTable do
       patient.betting_sequence.should == @betting_sequence
       patient.betting_sequence_string.should == @betting_sequence_string
       patient.chip_contributions.should == @chip_contributions
-      #patient.chip_balance_over_hand.should == @chip_balance_over_hand
-      #patient.match_state_string.should == @match_state
    end
 end
