@@ -269,6 +269,8 @@ class PlayersAtTheTable
    # @return [Boolean] +true+ if the current hand is the last in the match.
    def last_hand?
       # @todo make sure +@match_state_string.hand_number+ is not greater than @number_of_hands
+      return false unless @transition.next_state
+      
       @transition.next_state.hand_number == @number_of_hands - 1
    end
    
