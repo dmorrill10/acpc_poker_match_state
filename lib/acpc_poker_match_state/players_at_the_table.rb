@@ -369,6 +369,8 @@ class PlayersAtTheTable
       )
       player_who_acted_last.take_action! action_with_context
       
+      @min_wager = ChipStack.new [@min_wager.to_i, action_with_context.amount_to_put_in_pot.to_i].max
+
       if @transition.new_round?
          @players.each { |player| player.start_new_round! }
          set_min_wager!

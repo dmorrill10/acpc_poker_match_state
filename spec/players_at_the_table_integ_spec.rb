@@ -177,8 +177,6 @@ describe PlayersAtTheTable do
          )
       )
 
-      @min_wager = @game_def.min_wagers[@match_state.round]
-
       @min_wager = [@last_action.amount_to_put_in_pot.to_i, @min_wager].max
       
       @chip_contributions[seat_of_last_player_to_act][-1] += @last_action.amount_to_put_in_pot.to_i
@@ -196,6 +194,7 @@ describe PlayersAtTheTable do
          @chip_contributions.each do |contribution|
             contribution << 0
          end
+         @min_wager = @game_def.min_wagers[@match_state.round]
       end
    end
    def init_new_hand_data!(type)
