@@ -42,14 +42,16 @@ describe PlayersAtTheTable do
                   
                   init_before_first_turn_data! num_players, type, users_seat
                   
-                  game_def = init_game_def type, @players
+                  @game_def = init_game_def type, @players
+
+                  @min_wager = @game_def.min_wagers.first
                   
                   Player.stubs(:create_players).with(
-                     @players.map{|p| p.name}, game_def
+                     @players.map{|p| p.name}, @game_def
                   ).returns(@players)
                   
                   @patient = PlayersAtTheTable.seat_players(
-                     game_def,
+                     @game_def,
                      (@players.map{ |player| player.name }),
                      users_seat,
                      GAME_DEFS[type][:number_of_hands]
@@ -95,7 +97,7 @@ describe PlayersAtTheTable do
                      end
                      
                      if !next_turn || MatchStateString.parse(next_turn[:to_players]['1']).first_state_of_first_round?
-                        init_hand_result_data! data_by_type, game_def
+                        init_hand_result_data! data_by_type
                      end
                      
                      @patient.update! @match_state
@@ -129,7 +131,7 @@ describe PlayersAtTheTable do
          hash
       end
    end
-   def init_hand_result_data!(data_by_type, game_def)
+   def init_hand_result_data!(data_by_type)
       result = data_by_type[:results][@hand_num]
       @hand_num += 1
       
@@ -139,7 +141,7 @@ describe PlayersAtTheTable do
          
          # @todo Only in Doyle's game
          @chip_stacks[player.seat] =
-            game_def.chip_stacks[positions_relative_to_dealer[player.seat]].to_i +
+            @game_def.chip_stacks[positions_relative_to_dealer[player.seat]].to_i +
             final_balance.to_i
          
          # @todo Assumes Doyle's game in three player
@@ -174,6 +176,10 @@ describe PlayersAtTheTable do
             )
          )
       )
+
+      @min_wager = @game_def.min_wagers[@match_state.round]
+
+      @min_wager = [@last_action.amount_to_put_in_pot.to_i, @min_wager].max
       
       @chip_contributions[seat_of_last_player_to_act][-1] += @last_action.amount_to_put_in_pot.to_i
       @chip_stacks[seat_of_last_player_to_act] -= @last_action.amount_to_put_in_pot
@@ -201,6 +207,8 @@ describe PlayersAtTheTable do
       @betting_sequence = []
       @betting_sequence_string = ''
       
+      @min_wager = @game_def.min_wagers.first
+
       init_new_hand_chip_data! type
    end
    def init_new_hand_chip_data!(type)
@@ -275,13 +283,13 @@ describe PlayersAtTheTable do
       players
    end
    def init_game_def(type, players)
-      game_def = mock 'GameDefinition'
-      game_def.stubs(:first_positions_relative_to_dealer).returns(GAME_DEFS[type][:first_positions_relative_to_dealer])
-      game_def.stubs(:number_of_players).returns(players.length)
-      game_def.stubs(:blinds).returns(GAME_DEFS[type][:blinds])
-      game_def.stubs(:chip_stacks).returns(players.map { |player| player.chip_stack })
-      game_def.stubs(:min_wagers).returns(GAME_DEFS[type][:small_bets])
-      game_def
+      @game_def = mock 'GameDefinition'
+      @game_def.stubs(:first_positions_relative_to_dealer).returns(GAME_DEFS[type][:first_positions_relative_to_dealer])
+      @game_def.stubs(:number_of_players).returns(players.length)
+      @game_def.stubs(:blinds).returns(GAME_DEFS[type][:blinds])
+      @game_def.stubs(:chip_stacks).returns(players.map { |player| player.chip_stack })
+      @game_def.stubs(:min_wagers).returns(GAME_DEFS[type][:small_bets])
+      @game_def
    end
    def check_patient(patient=@patient)
       patient.player_acting_sequence.should == @player_acting_sequence
@@ -308,5 +316,6 @@ describe PlayersAtTheTable do
       patient.betting_sequence.should == @betting_sequence
       patient.betting_sequence_string.should == @betting_sequence_string
       patient.chip_contributions.should == @chip_contributions
+      patient.min_wager.to_i.should == @min_wager.to_i
    end
 end

@@ -28,6 +28,8 @@ class PlayersAtTheTable
    
    attr_reader :users_seat
    
+   attr_reader :min_wager
+   
    alias_new :seat_players
    
    # @param [GameDefinition] game_def The game definition for the
@@ -47,6 +49,7 @@ class PlayersAtTheTable
       end
       
       @game_def = game_def
+      @min_wager = @game_def.min_wagers.first
       
       @transition = MatchStateTransition.new
       
@@ -337,15 +340,15 @@ class PlayersAtTheTable
    def start_new_hand!
       @player_acting_sequence = [[]]
       
-      @players.each_index do |i|
-         player = @players[i]
-
+      @players.each do |player|
          player.start_new_hand!(
             blinds[position_relative_to_dealer(player)],
             @game_def.chip_stacks[position_relative_to_dealer(player)], # @todo if playing Doyle's game
             @transition.next_state.list_of_hole_card_hands[position_relative_to_dealer(player)]
          )
       end
+
+      set_min_wager!
    end
    
    def assign_hole_cards_to_players!
@@ -368,6 +371,7 @@ class PlayersAtTheTable
       
       if @transition.new_round?
          @players.each { |player| player.start_new_round! }
+         set_min_wager!
       end
       
       if hand_ended?
@@ -411,9 +415,8 @@ class PlayersAtTheTable
       chip_contributions.mapped_sum.sum
    end
    
-   def copy_data!(data_hash)
-      @transition = data_hash[:transition].clone
-      @players = data_hash[:players].copy
+   def set_min_wager!
+      @min_wager = @game_def.min_wagers[@transition.next_state.round]
    end
 end
 
