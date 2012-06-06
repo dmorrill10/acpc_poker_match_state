@@ -29,7 +29,7 @@ describe PlayersAtTheTable do
       }
    }
    
-   describe '#update! and ::copy' do
+   describe '#update!' do
       it "keeps track of state for a sequence of match states and actions in Doyle's game" do
          # @todo Move into data retrieval method
          DealerData::DATA.each do |num_players, data_by_num_players|

@@ -19,7 +19,8 @@ describe PlayersAtTheTable do
                   game_def = mock('GameDefinition')
                   game_def.stubs(:number_of_players).returns(player_list.length)
                   game_def.stubs(:chip_stacks).returns(player_list.map{|p| p.chip_stack})
-                  
+                  game_def.stubs(:min_wagers).returns([0])
+
                   expect do
                      PlayersAtTheTable.seat_players(
                         game_def,
@@ -287,6 +288,7 @@ describe PlayersAtTheTable do
       game_def = mock 'GameDefinition'
       game_def.stubs(:first_positions_relative_to_dealer).returns(@initial_example.given.first_positions_relative_to_dealer)
       game_def.stubs(:blinds).returns(@initial_example.given.blinds)
+      game_def.stubs(:min_wagers).returns([0])
       
       Player.stubs(:create_players).returns(@initial_example.given.players)
       
