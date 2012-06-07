@@ -9,43 +9,26 @@ describe MatchStateTransition do
       @patient = MatchStateTransition.new
    end
    
-   describe '#next_state!' do
-      describe 'assigns the new state to be the next state' do
-         it 'during transition' do
-            new_state = mock 'MatchStateString'
+   describe '#set_next_state!' do
+      it 'assigns the new state to be the next state' do
+         new_state = mock 'MatchStateString'
             
-            @patient.next_state! new_state do
-               @patient.next_state.should == new_state
-            end
-         end
-         it 'after transition' do
-            new_state = mock 'MatchStateString'
-            
-            @patient.next_state!(new_state) {}
-            @patient.next_state.should == new_state
-         end
+         @patient.set_next_state! new_state
+         @patient.next_state.should == new_state
       end
-      describe 'replaces the last state' do
-         it 'only after transition' do
-            last_state = mock 'MatchStateString'
+      it 'replaces the last state' do
+         last_state = mock 'MatchStateString'
             
-            @patient.next_state!(last_state) do
-               @patient.last_state.should == nil
-            end
+         @patient.set_next_state! last_state
+         @patient.last_state.should == nil
+         @patient.next_state.should == last_state
             
-            @patient.last_state.should == last_state
-            @patient.next_state.should == last_state
+         next_state = mock 'MatchStateString'
             
-            next_state = mock 'MatchStateString'
-            
-            @patient.next_state! next_state do
-               @patient.last_state.should == last_state
-               @patient.last_state.should_not be next_state
-            end
-            
-            @patient.last_state.should == next_state
-            @patient.next_state.should == next_state
-         end
+         @patient.set_next_state! next_state
+         @patient.last_state.should == last_state
+         @patient.next_state.should == next_state
+         @patient.last_state.should_not be next_state
       end
    end
    describe '#new_round?' do
@@ -54,110 +37,45 @@ describe MatchStateTransition do
             @patient.new_round?
          end.to raise_exception(MatchStateTransition::NoStateGiven)
       end
-      describe 'when given an initial state' do
-         it 'reports true while in transition' do
+      describe 'reports true' do
+         it 'when given an initial state' do
             new_state = mock 'MatchStateString'
             
-            @patient.next_state! new_state do
-               @patient.new_round?.should == true
-            end
+            @patient.set_next_state!(new_state).new_round?.should == true
          end
-         it 'reports false after transition' do
+         it 'when subsequently given a state with a later round' do
+            initial_state = mock 'MatchStateString'
+            initial_state.stubs(:round).returns(0)
+         
+            @patient.set_next_state! initial_state
+         
+            new_state = mock 'MatchStateString'
+            new_state.stubs(:round).returns(1)
+         
+            @patient.set_next_state!(new_state).new_round?.should == true
+         end
+         it 'when subsequently given a state with an earlier round' do
+            initial_state = mock 'MatchStateString'
+            initial_state.stubs(:round).returns(1)
+         
+            @patient.set_next_state! initial_state
+         
             new_state = mock 'MatchStateString'
             new_state.stubs(:round).returns(0)
-      
-            @patient.next_state!(new_state) {}
-               
-            @patient.new_round?.should == false
+         
+            @patient.set_next_state!(new_state).new_round?.should == true
          end
       end
-      describe 'when given a subsequent state' do
-         describe 'reports false when the rounds are the same' do
-            it 'during transition' do
-               initial_state = mock 'MatchStateString'
-               initial_state.stubs(:round).returns(0)
-               
-               @patient.next_state!(initial_state) {}
-               
-               new_state = mock 'MatchStateString'
-               new_state.stubs(:round).returns(0)
-               
-               @patient.next_state!(new_state) do
-                  @patient.new_round?.should == false
-               end
-            end
-            it 'after transition' do
-               initial_state = mock 'MatchStateString'
-               initial_state.stubs(:round).returns(0)
-               
-               @patient.next_state!(initial_state) {}
-               
-               new_state = mock 'MatchStateString'
-               new_state.stubs(:round).returns(0)
-               
-               @patient.next_state!(new_state) {}
-               
-               @patient.new_round?.should == false
-            end
-         end
-         describe 'when the next round' do
-            describe 'is later,' do
-               it 'true is reported during transition' do
-                  initial_state = mock 'MatchStateString'
-                  initial_state.stubs(:round).returns(0)
-               
-                  @patient.next_state!(initial_state) {}
-               
-                  new_state = mock 'MatchStateString'
-                  new_state.stubs(:round).returns(1)
-               
-                  @patient.next_state!(new_state) do
-                     @patient.new_round?.should == true
-                  end
-               end
-               it 'false is reported after transition' do
-                  initial_state = mock 'MatchStateString'
-                  initial_state.stubs(:round).returns(0)
-               
-                  @patient.next_state!(initial_state) {}
-               
-                  new_state = mock 'MatchStateString'
-                  new_state.stubs(:round).returns(1)
-               
-                  @patient.next_state!(new_state) {}
-               
-                  @patient.new_round?.should == false
-               end
-            end
-            describe 'is earlier,' do
-               it 'true is reported during transition' do
-                  initial_state = mock 'MatchStateString'
-                  initial_state.stubs(:round).returns(1)
-               
-                  @patient.next_state!(initial_state) {}
-               
-                  new_state = mock 'MatchStateString'
-                  new_state.stubs(:round).returns(0)
-               
-                  @patient.next_state!(new_state) do
-                     @patient.new_round?.should == true
-                  end
-               end
-               it 'false is reported after transition' do
-                  initial_state = mock 'MatchStateString'
-                  initial_state.stubs(:round).returns(1)
-               
-                  @patient.next_state!(initial_state) {}
-               
-                  new_state = mock 'MatchStateString'
-                  new_state.stubs(:round).returns(0)
-               
-                  @patient.next_state!(new_state) {}
-               
-                  @patient.new_round?.should == false
-               end
-            end
-         end
+      it 'reports false when subsequently given a state with the same round' do
+         initial_state = mock 'MatchStateString'
+         initial_state.stubs(:round).returns(0)
+      
+         @patient.set_next_state! initial_state
+      
+         new_state = mock 'MatchStateString'
+         new_state.stubs(:round).returns(0)
+      
+         @patient.set_next_state!(new_state).new_round?.should == false
       end
    end
    describe '#initial_state?' do
@@ -166,45 +84,19 @@ describe MatchStateTransition do
             @patient.initial_state?
          end.to raise_exception(MatchStateTransition::NoStateGiven)
       end
-      describe 'reports true when given a state that reports it is the first ' +
+      it 'reports true when given a state that reports it is the first ' +
          'state of the first round' do
-      
-         it 'while in transition' do
-            new_state = mock 'MatchStateString'
-            new_state.stubs(:first_state_of_first_round?).returns(true)
-   
-            @patient.next_state! new_state do
-               @patient.initial_state?.should == true
-            end
-         end
-         it 'after transition' do
-            new_state = mock 'MatchStateString'
-            new_state.stubs(:first_state_of_first_round?).returns(true)
+         new_state = mock 'MatchStateString'
+         new_state.stubs(:first_state_of_first_round?).returns(true)
             
-            @patient.next_state!(new_state) {}
-            
-            @patient.initial_state?.should == true
-         end
+         @patient.set_next_state!(new_state).initial_state?.should == true
       end
-      describe 'reports false when given a state that reports it is not the ' +
+      it 'reports false when given a state that reports it is not the ' +
          'first state of the first round' do
-      
-         it 'while in transition' do
-            new_state = mock 'MatchStateString'
-            new_state.stubs(:first_state_of_first_round?).returns(false)
-   
-            @patient.next_state! new_state do
-               @patient.initial_state?.should == false
-            end
-         end
-         it 'after transition' do
-            new_state = mock 'MatchStateString'
-            new_state.stubs(:first_state_of_first_round?).returns(false)
-            
-            @patient.next_state!(new_state) {}
-            
-            @patient.initial_state?.should == false
-         end
+         new_state = mock 'MatchStateString'
+         new_state.stubs(:first_state_of_first_round?).returns(false)
+         
+         @patient.set_next_state!(new_state).initial_state?.should == false
       end
    end
 end

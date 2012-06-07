@@ -13,10 +13,10 @@ class MatchStateTransition
    
    attr_reader :last_state
    
-   def next_state!(new_state)
-      @next_state = new_state
-      yield
+   def set_next_state!(new_state)
       @last_state = @next_state
+      @next_state = new_state
+      self
    end
    
    # @return [Boolean] +true+ if the next state's round is different from the
