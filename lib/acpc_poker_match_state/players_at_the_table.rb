@@ -89,7 +89,7 @@ class PlayersAtTheTable
          reference_position = if state.number_of_actions_this_round > 0
             position_relative_to_dealer player_who_acted_last
          else
-            @game_def.first_positions_relative_to_dealer[state.round] - 1
+            @game_def.first_player_positions[state.round] - 1
          end
 
          number_of_players.times.inject(nil) do |player_who_might_act, i|

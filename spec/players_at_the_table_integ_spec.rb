@@ -17,13 +17,13 @@ describe PlayersAtTheTable do
    GAME_DEFS = {
       limit: {
          stack_size: 400, small_bets: [2, 2, 4, 4],
-         first_positions_relative_to_dealer: [1, 0, 0, 0],
+         first_player_positions: [1, 0, 0, 0],
          blinds: [2, 1],
          number_of_hands: 100
       },
       nolimit: {
          stack_size: 20000, small_bets: [100, 100, 100, 100],
-         first_positions_relative_to_dealer: [1, 0, 0, 0],
+         first_player_positions: [1, 0, 0, 0],
          blinds: [100, 50],
          number_of_hands: 100
       }
@@ -283,7 +283,7 @@ describe PlayersAtTheTable do
    end
    def init_game_def(type, players)
       @game_def = mock 'GameDefinition'
-      @game_def.stubs(:first_positions_relative_to_dealer).returns(GAME_DEFS[type][:first_positions_relative_to_dealer])
+      @game_def.stubs(:first_player_positions).returns(GAME_DEFS[type][:first_player_positions])
       @game_def.stubs(:number_of_players).returns(players.length)
       @game_def.stubs(:blinds).returns(GAME_DEFS[type][:blinds])
       @game_def.stubs(:chip_stacks).returns(players.map { |player| player.chip_stack })
