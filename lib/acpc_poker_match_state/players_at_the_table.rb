@@ -276,7 +276,9 @@ class PlayersAtTheTable
    
    # @return [Set] The set of legal actions for the currently acting player.
    def legal_actions
-      list_of_action_symbols = if player_sees_wager?
+      list_of_action_symbols = if next_player_to_act.nil?
+         []
+      elsif player_sees_wager?
          [:call, :fold, :raise]
       elsif player_contributed_to_pot_this_round?
          [:check, :raise]
