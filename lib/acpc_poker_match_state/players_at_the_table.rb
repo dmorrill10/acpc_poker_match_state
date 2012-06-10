@@ -349,13 +349,13 @@ class PlayersAtTheTable
       assign_hole_cards_to_players!
       
       action_with_context = PokerAction.new(
-         @transition.next_state.last_action.to_acpc,
-         cost_of_action(
-            player_who_acted_last,
-            @transition.next_state.last_action
-         ),
-         nil,
-         player_sees_wager?(player_who_acted_last)
+         @transition.next_state.last_action.to_acpc, {
+            amount_to_put_in_pot: cost_of_action(
+               player_who_acted_last,
+               @transition.next_state.last_action
+            ),
+            acting_player_sees_wager: player_sees_wager?(player_who_acted_last)
+         }
       )
       player_who_acted_last.take_action! action_with_context
       

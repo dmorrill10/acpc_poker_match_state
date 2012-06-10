@@ -164,17 +164,20 @@ describe PlayersAtTheTable do
       seat_of_last_player_to_act = seat_taking_action.to_i - 1
       @player_who_acted_last = @players[seat_of_last_player_to_act]
       
-      @last_action = PokerAction.new(from_player_message[seat_taking_action],
-         @patient.cost_of_action(@player_who_acted_last,
-            PokerAction.new(from_player_message[seat_taking_action]),
-            (@betting_sequence.length - 1)
-         ),
-         nil,
-         (@patient.amount_to_call(@player_who_acted_last) > 0 ||
-            (GAME_DEFS[type][:blinds][positions_relative_to_dealer[seat_of_last_player_to_act]] > 0 &&
-               @player_who_acted_last.actions_taken_this_hand[0].length < 1
+      @last_action = PokerAction.new(
+         from_player_message[seat_taking_action], {
+            amount_to_put_in_pot: @patient.cost_of_action(@player_who_acted_last,
+               PokerAction.new(from_player_message[seat_taking_action]), (
+                  @betting_sequence.length - 1
+               )
+            ),
+            acting_player_sees_wager: (
+               @patient.amount_to_call(@player_who_acted_last) > 0 || (
+                  GAME_DEFS[type][:blinds][positions_relative_to_dealer[seat_of_last_player_to_act]] > 0 &&
+                  @player_who_acted_last.actions_taken_this_hand[0].length < 1
+               )
             )
-         )
+         }
       )
 
       @min_wager = [@last_action.amount_to_put_in_pot.to_i, @min_wager].max
