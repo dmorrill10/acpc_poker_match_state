@@ -35,12 +35,12 @@ class PlayersAtTheTable
    
    # @param [GameDefinition] game_def The game definition for the
    #  match these players are playing.
-   # @param [Array<String>] player_names The names of the players to seat at the table.
+   # @param [Array<String>] player_names The names of the players to seat at the table, 
+   #  ordered by seat.
    # @param [Integer] users_seat The user's seat at the table.
    #  players are joining.
    # @param [Integer] number_of_hands The number of hands in this match.
-   def initialize(game_def, player_names, users_seat,
-                  number_of_hands)
+   def initialize(game_def, player_names, users_seat, number_of_hands)
       @players = Player.create_players player_names, game_def
       
       @users_seat = if users_seat.seat_in_bounds?(number_of_players) && @players.any?{|player| player.seat == users_seat}
@@ -300,7 +300,7 @@ class PlayersAtTheTable
    private
    
    def player_contributed_to_pot_this_round?(player=next_player_to_act)
-      player.contribution.last > 0
+      player.chip_contribution.last > 0
    end
    
    def player_sees_wager?(player=next_player_to_act)
