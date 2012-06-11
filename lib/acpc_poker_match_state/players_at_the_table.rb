@@ -306,8 +306,10 @@ class PlayersAtTheTable
    end
    
    # @todo Change MST#next_state to current_state
-   def chips_contributed_to_pot_this_round?
-      chip_contributions[@transition.next_state.round].sum > 0
+   def chips_contributed_to_pot_this_round?(round=@transition.next_state.round)
+      chip_contributions.inject(0) do |both_players_contributions, contributions|
+         both_players_contributions += contributions[round].to_i
+      end > 0
    end
 
    def player_sees_wager?(player=next_player_to_act)
@@ -358,8 +360,8 @@ class PlayersAtTheTable
                player_who_acted_last,
                @transition.next_state.last_action
             ),
-            # @todo Change the name of the key here
-            acting_player_sees_wager: (player_sees_wager?(player_who_acted_last) || chip_contributions.inject(0){|sum, contribution| sum += contribution[@transition.next_state.round_in_which_last_action_taken]} > 0)
+            # @todo Change the name and semantics of this key here
+            acting_player_sees_wager: chips_contributed_to_pot_this_round?(@transition.next_state.round_in_which_last_action_taken)
          }
       )
       player_who_acted_last.take_action! action_with_context
