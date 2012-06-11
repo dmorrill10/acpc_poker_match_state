@@ -255,7 +255,7 @@ class PlayersAtTheTable
    end
    
    def amount_to_call(player)
-      largest_contribution = @players.map do |p|
+      @players.map do |p|
          p.chip_contribution_over_hand
       end.max - player.chip_contribution_over_hand
    end
@@ -280,7 +280,7 @@ class PlayersAtTheTable
          []
       elsif player_sees_wager?
          [:call, :fold, :raise]
-      elsif player_contributed_to_pot_this_round?
+      elsif chips_contributed_to_pot_this_round?
          [:check, :raise]
       else
          [:check, :bet]
@@ -305,11 +305,13 @@ class PlayersAtTheTable
       player.chip_contribution.last > 0
    end
    
+   # @todo Change MST#next_state to current_state
+   def chips_contributed_to_pot_this_round?
+      chip_contributions[@transition.next_state.round].sum > 0
+   end
+
    def player_sees_wager?(player=next_player_to_act)
-      amount_to_call(player) > 0 || (
-         blinds[position_relative_to_dealer(player)] > 0 &&
-            player.actions_taken_this_hand[0].length < 1
-      )
+      amount_to_call(player) > 0
    end
    
    def users_position_relative_to_dealer() @transition.next_state.position_relative_to_dealer end
@@ -349,14 +351,15 @@ class PlayersAtTheTable
    
    def update_state_of_players!
       assign_hole_cards_to_players!
-      
+
       action_with_context = PokerAction.new(
          @transition.next_state.last_action.to_acpc, {
             amount_to_put_in_pot: cost_of_action(
                player_who_acted_last,
                @transition.next_state.last_action
             ),
-            acting_player_sees_wager: player_sees_wager?(player_who_acted_last)
+            # @todo Change the name of the key here
+            acting_player_sees_wager: (player_sees_wager?(player_who_acted_last) || chip_contributions.inject(0){|sum, contribution| sum += contribution[@transition.next_state.round_in_which_last_action_taken]} > 0)
          }
       )
       player_who_acted_last.take_action! action_with_context
