@@ -147,10 +147,10 @@ describe PlayersAtTheTable do
          # @todo Assumes Doyle's game in three player
          if final_balance.to_i == 0
             @chip_balances[player.seat] = @last_hands_balance[player.seat].to_i
-            @chip_contributions[player.seat][-1] -= @chip_contributions[player.seat].sum
+            @chip_contributions[player.seat] << -@chip_contributions[player.seat].sum
          elsif final_balance.to_i > 0
             @chip_balances[player.seat] = @last_hands_balance[player.seat].to_i + final_balance.to_i
-            @chip_contributions[player.seat][-1] -= @chip_contributions.mapped_sum.sum
+            @chip_contributions[player.seat] << -@chip_contributions.mapped_sum.sum
          end
          
          @last_hands_balance[player.seat] = @chip_balances[player.seat]
