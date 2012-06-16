@@ -256,8 +256,8 @@ class PlayersAtTheTable
    
    def amount_to_call(player)
       @players.map do |p|
-         p.chip_contributions_over_hand
-      end.max - player.chip_contributions_over_hand
+         p.chip_contributions.sum
+      end.max - player.chip_contributions.sum
    end
    
    def cost_of_action(player, action, round=round_in_which_last_action_taken)
@@ -265,7 +265,7 @@ class PlayersAtTheTable
          amount_to_call player
       elsif action.to_sym == :bet || action.to_sym == :raise
          if action.modifier
-            action.modifier - player.chip_contributions_over_hand
+            action.modifier - player.chip_contributions.sum
          else
             @game_def.min_wagers[round] + amount_to_call(player)
          end
