@@ -223,7 +223,7 @@ class PlayersAtTheTable
    
    # return [Array<Array<Integer>>] Each player's current chip contribution organized by round.
    def chip_contributions
-      @players.map { |player| player.chip_contribution }
+      @players.map { |player| player.chip_contributions }
    end
    
    # @param [Integer] player The player of which the position relative to the
@@ -256,8 +256,8 @@ class PlayersAtTheTable
    
    def amount_to_call(player)
       @players.map do |p|
-         p.chip_contribution_over_hand
-      end.max - player.chip_contribution_over_hand
+         p.chip_contributions_over_hand
+      end.max - player.chip_contributions_over_hand
    end
    
    def cost_of_action(player, action, round=round_in_which_last_action_taken)
@@ -265,7 +265,7 @@ class PlayersAtTheTable
          amount_to_call player
       elsif action.to_sym == :bet || action.to_sym == :raise
          if action.modifier
-            action.modifier - player.chip_contribution_over_hand
+            action.modifier - player.chip_contributions_over_hand
          else
             @game_def.min_wagers[round] + amount_to_call(player)
          end
@@ -302,7 +302,7 @@ class PlayersAtTheTable
    private
    
    def player_contributed_to_pot_this_round?(player=next_player_to_act)
-      player.chip_contribution.last > 0
+      player.chip_contributions.last > 0
    end
    
    # @todo Change MST#next_state to current_state
