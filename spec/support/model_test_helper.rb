@@ -10,7 +10,7 @@ module ModelTestHelper
       user_position = 1;
       hand_number = 0
       hole_card_hand = arbitrary_hole_card_hand
-      initial_match_state = mock('MatchStateString')
+      initial_match_state = mock('MatchState')
       initial_match_state.stubs(:position_relative_to_dealer).returns(user_position)
       initial_match_state.stubs(:hand_number).returns(hand_number)
       initial_match_state.stubs(:list_of_board_cards).returns([])
@@ -22,7 +22,7 @@ module ModelTestHelper
       initial_match_state.stubs(:round).returns(0)
       initial_match_state.stubs(:number_of_actions_in_current_round).returns(0)
       
-      raw_match_state =  AcpcPokerTypesDefs::MATCH_STATE_LABEL + ":#{user_position}:#{hand_number}::" + hole_card_hand
+      raw_match_state =  AcpcPokerTypes::MATCH_STATE_LABEL + ":#{user_position}:#{hand_number}::" + hole_card_hand
       initial_match_state.stubs(:to_s).returns(raw_match_state)
       
       [initial_match_state, user_position]
@@ -92,7 +92,7 @@ module ModelTestHelper
       
    def setup_action_test(match_state, action_type, action_argument = '')
       action = action_argument + action_type
-      expected_string = raw_match_state_string match_state, action
+      expected_string = raw_match_state match_state, action
       
       expected_string
    end
@@ -100,7 +100,7 @@ module ModelTestHelper
    
    # Helper methods -----------------------------------------------------------
 
-   def raw_match_state_string(match_state, action)
+   def raw_match_state(match_state, action)
       "#{match_state}:#{action}"
    end
    
@@ -109,10 +109,10 @@ module ModelTestHelper
    # @return [Mock Hand] An arbitrary hole card hand.
    def arbitrary_hole_card_hand
       hand = mock('Hand')
-      hand_as_string = AcpcPokerTypesDefs::CARD_RANKS[:two]
-         + AcpcPokerTypesDefs::CARD_SUITS[:spades][:acpc_character]
-         + AcpcPokerTypesDefs::CARD_RANKS[:three]
-         + AcpcPokerTypesDefs::CARD_SUITS[:hearts][:acpc_character]
+      hand_as_string = AcpcPokerTypes::CARD_RANKS[:two]
+         + AcpcPokerTypes::CARD_SUITS[:spades][:acpc_character]
+         + AcpcPokerTypes::CARD_RANKS[:three]
+         + AcpcPokerTypes::CARD_SUITS[:hearts][:acpc_character]
       hand.stubs(:to_str).returns(hand_as_string)
       hand.stubs(:to_s).returns(hand_as_string)
       

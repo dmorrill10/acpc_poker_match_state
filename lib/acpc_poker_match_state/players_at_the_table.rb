@@ -1,13 +1,10 @@
 
-# Local modules
-require File.expand_path('../acpc_poker_match_state_defs', __FILE__)
-require File.expand_path('../match_state_transition', __FILE__)
-
-# Gems
+require 'dmorrill10-utils'
 require 'acpc_poker_types'
 
+require File.expand_path('../match_state_transition', __FILE__)
+
 class PlayersAtTheTable
-   include AcpcPokerTypesHelper
    
    exceptions :player_acted_before_sitting_at_table,
       :no_players_to_seat, :users_seat_out_of_bounds,
@@ -66,9 +63,9 @@ class PlayersAtTheTable
    # @return [Integer] The number of players seated at the table.
    def number_of_players() @players.length end
    
-   # @param [MatchStateString] match_state_string The next match state.
-   def update!(match_state_string)
-      @transition.set_next_state! match_state_string
+   # @param [MatchState] match_state The next match state.
+   def update!(match_state)
+      @transition.set_next_state! match_state
       
       if @transition.initial_state?
          start_new_hand!
@@ -293,7 +290,7 @@ class PlayersAtTheTable
    
    # @return [Boolean] +true+ if the current hand is the last in the match.
    def last_hand?
-      # @todo make sure +@match_state_string.hand_number+ is not greater than @number_of_hands
+      # @todo make sure +@match_state.hand_number+ is not greater than @number_of_hands
       return false unless @transition.next_state
       
       @transition.next_state.hand_number == @number_of_hands - 1
@@ -318,7 +315,7 @@ class PlayersAtTheTable
    
    def users_position_relative_to_dealer() @transition.next_state.position_relative_to_dealer end
    
-   # @todo move to MatchStateString
+   # @todo move to MatchState
    def round_in_which_last_action_taken(state=@transition.next_state)
       unless state && state.number_of_actions_this_hand > 0
          nil

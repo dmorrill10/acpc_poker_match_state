@@ -5,8 +5,10 @@ class Symbol
    end
 end
 
-require 'acpc_poker_types/mixins/utils'
+require 'dmorrill10-utils'
 
+# @todo This was an attempt at organizing tests better but it didn't make tests any nicer.
+#  I would get rid of it, but it's still being used, so it will stay for now.
 class TestExample
    
    exceptions :no_properties_for_given, :no_properties_for_then
