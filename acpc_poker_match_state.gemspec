@@ -6,7 +6,7 @@ Gem::Specification.new do |s|
   s.version     = AcpcPokerMatchState::VERSION
   s.authors     = ["Dustin Morrill"]
   s.email       = ["morrill@ualberta.ca"]
-  s.homepage    = ""
+  s.homepage    = "https://github.com/dmorrill10/acpc_poker_match_state"
   s.summary     = %q{ACPC Poker Match State}
   s.description = %q{Match state data manager.}
   
