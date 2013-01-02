@@ -80,22 +80,20 @@ class PlayersAtTheTable
   end
 
   def next_player_to_act(state=@transition.next_state)
-    unless state && !hand_ended? && !active_players.empty?
-      nil
+    return nil unless state && !hand_ended? && !active_players.empty?
+      
+    reference_position = if state.number_of_actions_this_round > 0
+      position_relative_to_dealer player_who_acted_last
     else
-      reference_position = if state.number_of_actions_this_round > 0
-        position_relative_to_dealer player_who_acted_last
-      else
-        @game_def.first_player_positions[state.round] - 1
-      end
+      @game_def.first_player_positions[state.round] - 1
+    end
 
-      number_of_players.times.inject(nil) do |player_who_might_act, i|
-        position_relative_to_dealer_to_act = (reference_position + i + 1) % number_of_players
-        player_who_might_act = active_players.find do |player|
-          position_relative_to_dealer(player) == position_relative_to_dealer_to_act
-        end
-        if player_who_might_act then break player_who_might_act else nil end
+    number_of_players.times.inject(nil) do |player_who_might_act, i|
+      position_relative_to_dealer_to_act = (reference_position + i + 1) % number_of_players
+      player_who_might_act = active_players.find do |player|
+        position_relative_to_dealer(player) == position_relative_to_dealer_to_act
       end
+      if player_who_might_act then break player_who_might_act else nil end
     end
   end
 
@@ -366,7 +364,7 @@ class PlayersAtTheTable
     @min_wager = ChipStack.new [@min_wager.to_i, action_with_context.amount_to_put_in_pot.to_i].max
 
     if @transition.new_round?
-      @players.each { |player| player.start_new_round! }
+      active_players.each { |player| player.start_new_round! }
       set_min_wager!
     end
 
