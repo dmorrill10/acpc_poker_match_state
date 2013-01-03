@@ -256,17 +256,19 @@ class PlayersAtTheTable
   end
 
   def cost_of_action(player, action, round=round_in_which_last_action_taken)
-    ChipStack.new(if action.to_sym == :call
-                    amount_to_call player
-                  elsif action.to_sym == :bet || action.to_sym == :raise
-                    if action.modifier
-                      action.modifier - player.chip_contributions.sum
-                    else
-                      @game_def.min_wagers[round] + amount_to_call(player)
-                    end
-                  else
-                    0
-    end)
+    ChipStack.new(
+      if action.to_sym == :call
+        amount_to_call player
+      elsif action.to_sym == :bet || action.to_sym == :raise
+        if action.modifier
+          action.modifier - player.chip_contributions.sum
+        else
+          @game_def.min_wagers[round] + amount_to_call(player)
+        end
+      else
+        0
+      end
+    )
   end
 
   # @return [Set] The set of legal actions for the currently acting player.
@@ -355,7 +357,7 @@ class PlayersAtTheTable
           player_who_acted_last,
           @transition.next_state.last_action
         ),
-        # @todo Change the name and semantics of this key here
+        # @todo Change the name and semantics of this key here to chips_has_contributed
         acting_player_sees_wager: chips_contributed_to_pot_this_round?(@transition.next_state.round_in_which_last_action_taken)
       }
     )

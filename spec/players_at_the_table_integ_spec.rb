@@ -37,7 +37,6 @@ describe PlayersAtTheTable do
           num_hands
         )
         @match.for_every_seat! do |users_seat|
-          @hand_num = 0
 
           @patient = PlayersAtTheTable.seat_players(
             @match.match_def.game_def,
@@ -50,9 +49,6 @@ describe PlayersAtTheTable do
 
           @match.for_every_hand! do
             @match.for_every_turn! do
-              # @todo Won't be needed once data is separated better by game def
-              # next if @match_ended
-
               # from_player_message = @match.current_hand.next_action
 
               # match_state = @match.current_hand.current_match_state
@@ -91,6 +87,8 @@ describe PlayersAtTheTable do
               # if !next_turn || MatchState.parse(next_turn[:to_players]['1']).first_state_of_first_round?
               #   init_hand_result_data! data_by_type
               # end
+
+              puts "match_state: #{@match.current_hand.current_match_state}"
 
               @patient.update! @match.current_hand.current_match_state
 
@@ -276,56 +274,45 @@ describe PlayersAtTheTable do
     @game_def
   end
   def check_patient(patient=@patient)
-    # @todo Move this into PokerMatch
-    if @match.current_hand
-      patient.player_acting_sequence.should == if @match.current_hand.turn_number < 1 
-        [[]] 
-      else
-        player_acting_sequence = [[]]
-        turns_with_actions = @match.current_hand.data[0..@match.current_hand.turn_number-1].select do |turn|
-          turn.action_message
-        end
-        turns_with_actions.each_index do |turn_index|
-          turn = turns_with_actions[turn_index]
-
-          player_acting_sequence[turn.action_message.state.round] << turn.action_message.seat
-
-          if (
-            (
-              @match.current_hand.data.length > turn_index + 1 &&
-              @match.current_hand.data[turn_index + 1].action_message &&
-              @match.current_hand.data[turn_index + 1].action_message.state.round > (player_acting_sequence.length - 1)
-            ) || (
-              @match.current_hand.data.length == turn_index + 2 &&
-              player_acting_sequence.length < 4 && 
-              turn.action_message &&
-              (turns_with_actions[0..turn_index].count do |t| 
-                t.action_message.action.to_sym == :fold 
-              end) != @match.players.length - 1
-            )
-          )
-            player_acting_sequence << []
-          end
-        end
-
-        player_acting_sequence
-      end
+    patient.player_acting_sequence.should == @match.player_acting_sequence
+    patient.number_of_players.should == @match.players.length
+    if @match.current_hand && @match.current_hand.last_action
+      patient.player_who_acted_last.seat.should == @match.current_hand.last_action.seat
+    else
+      patient.player_who_acted_last.should be nil
     end
-    # patient.number_of_players.should == @number_of_players
-    # patient.player_who_acted_last.should be @player_who_acted_last
-    # patient.next_player_to_act.should be @next_player_to_act
-    # (patient.players.map { |player| player.hole_cards }).should == @hole_card_hands
-    # patient.user_player.should == @user_player
-    # patient.opponents.should == @opponents
-    # patient.active_players.should == @active_players
-    # patient.non_folded_players.should == @non_folded_players
-    # patient.opponents_cards_visible?.should == @opponents_cards_visible
-    # patient.reached_showdown?.should == @reached_showdown
-    # patient.less_than_two_non_folded_players?.should == @less_than_two_non_folded_players
-    # patient.hand_ended?.should == @hand_ended
-    # patient.last_hand?.should == @last_hand
-    # patient.match_ended?.should == @match_ended
-    # patient.player_with_dealer_button.should == @player_with_dealer_button
+    if @match.current_hand && @match.current_hand.next_action
+      patient.next_player_to_act.seat.should == @match.current_hand.next_action.seat
+    else
+      patient.next_player_to_act.should be nil
+    end
+    if @match.current_hand && @match.current_hand.final_turn?
+      patient.players.players_close_enough?(@match.players).should == true
+      patient.user_player.close_enough?(@match.player).should == true
+      patient.opponents.players_close_enough?(@match.opponents).should == true
+      patient.non_folded_players.players_close_enough?(@match.non_folded_players).should == true
+      patient.active_players.players_close_enough?(@match.active_players).should == true
+      
+    end
+    patient.opponents_cards_visible?.should == @match.opponents_cards_visible?
+    patient.reached_showdown?.should == @match.opponents_cards_visible?
+    patient.less_than_two_non_folded_players?.should == @match.non_folded_players.length < 2
+    if @match.current_hand
+      patient.hand_ended?.should == @match.current_hand.final_turn?
+      patient.match_ended?.should == (@match.final_hand? && @match.current_hand.final_turn?)
+    end
+    patient.last_hand?.should == if @match.final_hand?.nil?
+      false
+    else
+      @match.final_hand?
+    end
+
+    if @match.player_with_dealer_button
+      patient.player_with_dealer_button.close_enough?(@match.player_with_dealer_button).should == true
+    else
+      @match.player_with_dealer_button.should == nil
+    end
+
     # patient.player_blind_relation.should == @player_blind_relation
     # patient.player_acting_sequence_string.should == @player_acting_sequence_string
     # patient.users_turn_to_act?.should == @users_turn_to_act
@@ -335,5 +322,81 @@ describe PlayersAtTheTable do
     # patient.betting_sequence_string.should == @betting_sequence_string
     # patient.chip_contributions.should == @chip_contributions
     # patient.min_wager.to_i.should == @min_wager.to_i
+  end
+end
+
+class Array
+  def players_close_enough?(other_players)
+    puts "length: #{length}, other: #{other_players.length}"
+
+    return false if other_players.length != length
+    each_with_index do |player, index|
+      return false unless player.close_enough?(other_players[index])
+    end
+    true
+  end
+  def reject_empty_elements
+    reject do |elem|
+      elem.empty?
+    end
+  end
+end
+
+# @todo Move these into their respective classes
+class PokerMatchData
+  def opponents
+    @players.reject { |other_player| player == other_player }
+  end
+  def active_players
+    @players.select { |player_to_collect| player_to_collect.active? }
+  end
+  def non_folded_players
+    @players.reject { |player_to_reject| player_to_reject.folded? }
+  end
+  def opponents_cards_visible?
+    return false unless current_hand
+    
+    current_hand.current_match_state.list_of_hole_card_hands.reject_empty_elements.length > 1
+  end
+  def player_with_dealer_button
+    ####### @todo This is wrong
+    return nil unless current_hand
+    # @players.find { |player| player.seat == @players.length - 1 }
+  end
+end
+class PokerAction
+  # @return [Hash] Map of specific to general actions to more specific actions (e.g. check to call and bet to raise).
+  LOW_RESOLUTION_ACTION_CONVERSION = {call: :call, raise: :raise, fold: :fold, check: :call, bet: :raise}
+
+  def to_low_res_acpc
+    LEGAL_ACTIONS[LOW_RESOLUTION_ACTION_CONVERSION[@symbol]] + @modifier.to_s
+  end
+end
+class Player
+  def acpc_actions_taken_this_hand
+    acpc_actions = @actions_taken_this_hand.map do |actions_per_turn| 
+      actions_per_turn.map { |action| action.to_low_res_acpc }
+    end
+    if acpc_actions.first.empty?
+      acpc_actions
+    else
+      acpc_actions.reject_empty_elements
+    end
+  end
+
+  def close_enough?(other)
+    puts "name: #{name == other.name}"
+    puts "seat: #{seat == other.seat}"
+    puts "chip_stack: #{chip_stack}, other: #{other.chip_stack}"
+    puts "chip balances: #{chip_balance}, other: #{other.chip_balance}"
+    puts "actions_taken_this_hand: #{acpc_actions_taken_this_hand}, other: #{other.acpc_actions_taken_this_hand}"
+    puts "all_in: #{all_in?}, other: #{other.all_in?}"
+
+
+    @name == other.name &&
+    @seat == other.seat && 
+    @chip_stack == other.chip_stack &&
+    @chip_balance == other.chip_balance &&
+    acpc_actions_taken_this_hand == other.acpc_actions_taken_this_hand
   end
 end
