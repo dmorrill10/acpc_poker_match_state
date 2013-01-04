@@ -24,4 +24,5 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'simplecov'
   s.add_development_dependency 'acpc_dealer_data'
   s.add_development_dependency 'acpc_dealer'
+  s.add_development_dependency 'awesome_print'
 end

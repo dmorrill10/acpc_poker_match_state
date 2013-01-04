@@ -1,33 +1,15 @@
 
 require File.expand_path('../support/spec_helper', __FILE__)
 
-require 'acpc_poker_types/player'
-require 'acpc_poker_types/game_definition'
 require 'acpc_dealer'
 require 'acpc_dealer_data'
 
 require File.expand_path('../../lib/acpc_poker_match_state/players_at_the_table', __FILE__)
 
 describe PlayersAtTheTable do
-  # @todo integrate this into the data where its collected
-  GAME_DEFS = {
-    limit: {
-      stack_size: 400, small_bets: [2, 2, 4, 4],
-      first_player_positions: [1, 0, 0, 0],
-      blinds: [2, 1],
-      number_of_hands: 100
-    },
-    nolimit: {
-      stack_size: 20000, small_bets: [100, 100, 100, 100],
-      first_player_positions: [1, 0, 0, 0],
-      blinds: [100, 50],
-      number_of_hands: 100
-    }
-  }
-
   describe '#update!' do
     it "keeps track of state for a sequence of match states and actions in Doyle's game" do
-      num_hands = 40
+      num_hands = 15
       match_logs.each do |log_description|
         @match = PokerMatchData.parse_files(
           log_description.actions_file_path,
@@ -49,50 +31,7 @@ describe PlayersAtTheTable do
 
           @match.for_every_hand! do
             @match.for_every_turn! do
-              # from_player_message = @match.current_hand.next_action
-
-              # match_state = @match.current_hand.current_match_state
-
-              # prev_round = if @match.last_match_state then @match.last_match_state.round else nil end
-
-              # @last_hand = @match.final_hand?
-
-              # @next_player_to_act = if @match.current_hand.next_action
-              #   @players.select do |p| 
-              #     p.seat == @match.current_hand.next_action.seat
-              #   end.first
-              # else
-              #   nil
-              # end
-              # @users_turn_to_act = if @next_player_to_act
-              #   @next_player_to_act.seat == users_seat
-              # else
-              #   false
-              # end
-              # @match_state = @match.current_hand.current_match_state
-
-              # @hole_card_hands = @match.hole_cards
-
-              # if @match_state.first_state_of_first_round?
-              #   init_new_hand_data! type
-              # else
-              #   init_new_turn_data! type, from_player_message, prev_round
-              # end
-
-              # if @match_state.round != prev_round || @match_state.first_state_of_first_round?
-              #   @player_acting_sequence << []
-              #   @betting_sequence << []
-              # end
-
-              # if !next_turn || MatchState.parse(next_turn[:to_players]['1']).first_state_of_first_round?
-              #   init_hand_result_data! data_by_type
-              # end
-
-              puts "match_state: #{@match.current_hand.current_match_state}"
-
               @patient.update! @match.current_hand.current_match_state
-
-              # init_after_update_data! type
 
               check_patient
             end
@@ -102,177 +41,6 @@ describe PlayersAtTheTable do
     end
   end
 
-  def init_after_update_data!(type)
-    @active_players = @players.select { |player| player.active? }
-    @non_folded_players = @players.select { |player| !player.folded? }
-    @opponents_cards_visible = @opponents.any? { |player| !player.hole_cards.empty? }
-    @reached_showdown = @opponents_cards_visible
-    @less_than_two_non_folded_players = @non_folded_players.length < 2
-    @hand_ended = @less_than_two_non_folded_players || @reached_showdown
-    @match_ended = @hand_ended && @last_hand
-    @player_with_dealer_button = nil
-    @players.each_index do |j|
-      if positions_relative_to_dealer[j] == @players.length - 1
-        @player_with_dealer_button = @players[j]
-      end
-    end
-    @player_blind_relation = @players.inject({}) do |hash, player|
-      hash[player] = GAME_DEFS[type][:blinds][positions_relative_to_dealer[player.seat]]
-      hash
-    end
-  end
-  def init_hand_result_data!(data_by_type)
-    result = data_by_type[:results][@hand_num]
-    @hand_num += 1
-
-    result.each do |player_name, final_balance|
-      # @todo This assumption isn't robust yet
-      player = @players.find { |p| p.name == player_name }
-
-      # @todo Only in Doyle's game
-      @chip_stacks[player.seat] =
-        @game_def.chip_stacks[positions_relative_to_dealer[player.seat]].to_i +
-        final_balance.to_i
-
-      # @todo Assumes Doyle's game in three player
-      if final_balance.to_i == 0
-        @chip_balances[player.seat] = @last_hands_balance[player.seat].to_i
-        @chip_contributions[player.seat] << -@chip_contributions[player.seat].sum
-      elsif final_balance.to_i > 0
-        @chip_balances[player.seat] = @last_hands_balance[player.seat].to_i + final_balance.to_i
-        @chip_contributions[player.seat] << -@chip_contributions.mapped_sum.sum
-      end
-
-      @last_hands_balance[player.seat] = @chip_balances[player.seat]
-    end
-  end
-  def init_new_turn_data!(type, from_player_message, prev_round)
-    @betting_sequence << [] if @betting_sequence.empty?
-    @player_acting_sequence << [] if @player_acting_sequence.empty?
-
-    seat_taking_action = from_player_message.keys.first
-    seat_of_last_player_to_act = seat_taking_action.to_i - 1
-    @player_who_acted_last = @players[seat_of_last_player_to_act]
-
-    @last_action = PokerAction.new(
-      from_player_message[seat_taking_action], {
-        amount_to_put_in_pot: @patient.cost_of_action(@player_who_acted_last,
-                                                      PokerAction.new(from_player_message[seat_taking_action]), (
-                                                        @betting_sequence.length - 1
-                                                      )
-                                                      ),
-        acting_player_sees_wager: (
-          @patient.amount_to_call(@player_who_acted_last) > 0 || (
-            GAME_DEFS[type][:blinds][positions_relative_to_dealer[seat_of_last_player_to_act]] > 0 &&
-            @player_who_acted_last.actions_taken_this_hand[0].length < 1
-          )
-        )
-      }
-    )
-
-    @min_wager = [@last_action.amount_to_put_in_pot.to_i, @min_wager].max
-
-    @chip_contributions[seat_of_last_player_to_act][-1] += @last_action.amount_to_put_in_pot.to_i
-    @chip_stacks[seat_of_last_player_to_act] -= @last_action.amount_to_put_in_pot
-    @chip_balances[seat_of_last_player_to_act] -= @last_action.amount_to_put_in_pot.to_i
-
-    @player_acting_sequence.last << seat_of_last_player_to_act
-    @player_acting_sequence_string += seat_of_last_player_to_act.to_s
-    @betting_sequence.last << @last_action
-    @betting_sequence_string += @last_action.to_acpc
-
-    if @match_state.round != prev_round
-      @player_acting_sequence_string += '/'
-      @betting_sequence_string += '/'
-      @chip_contributions.each do |contribution|
-        contribution << 0
-      end
-      @min_wager = @game_def.min_wagers[@match_state.round]
-    end
-  end
-  def init_new_hand_data!(type)
-    @player_who_acted_last = nil
-
-    @player_acting_sequence = []
-    @player_acting_sequence_string = ''
-
-    @betting_sequence = []
-    @betting_sequence_string = ''
-
-    @min_wager = @game_def.min_wagers.first
-
-    init_new_hand_chip_data! type
-  end
-  def init_new_hand_chip_data!(type)
-    # @todo Assumes Doyle's Game
-    @chip_stacks = @players.each_index.inject([]) { |stacks, j| stacks << GAME_DEFS[type][:stack_size] }
-    @chip_contributions = []
-    @chip_stacks.each_index do |j|
-      @chip_stacks[j] -= GAME_DEFS[type][:blinds][positions_relative_to_dealer[j]]
-      @chip_balances[j] -= GAME_DEFS[type][:blinds][positions_relative_to_dealer[j]].to_i
-      @chip_contributions << [GAME_DEFS[type][:blinds][positions_relative_to_dealer[j]].to_i]
-    end
-  end
-  def init_before_first_turn_data!(users_seat)
-    @match_ended = false
-    @last_hands_balance = @players.length.times.inject([]) { |balances, i| balances << 0 }
-    @chip_balances = @players.map { |player| player.chip_balance.to_i }
-    @chip_contributions = @players.map { |player| player.chip_contributions }
-    @user_player = @players[users_seat]
-    @opponents = @players.select { |player| !player.eql?(@user_player) }
-    @hole_card_hands = @players.inject([]) { |hands, player| hands << player.hole_cards }
-    @opponents_cards_visible = false
-    @reached_showdown = @opponents_cards_visible
-    @less_than_two_non_folded_players = false
-    @hand_ended = @less_than_two_non_folded_players || @reached_showdown
-    @last_hand = false
-    @match_ended = @hand_ended && @last_hand
-    @active_players = @players
-    @non_folded_players = @players
-    @player_acting_sequence = [[]]
-    @player_acting_sequence_string = ''
-    @users_turn_to_act = false
-    @chip_stacks = @players.map { |player| player.chip_stack }
-    @betting_sequence = [[]]
-    @betting_sequence_string = ''
-    @player_who_acted_last = nil
-    @next_player_to_act = nil
-    @player_with_dealer_button = nil
-    @player_blind_relation = nil
-  end
-  def index_of_next_player_to_act(turn) turn[:from_players].keys.first.to_i - 1 end
-  def positions_relative_to_dealer
-    positions = []
-    @match_state.list_of_hole_card_hands.each_index do |pos_rel_dealer|
-      @hole_card_hands.each_index do |seat|
-        if @hole_card_hands[seat] == @match_state.list_of_hole_card_hands[pos_rel_dealer]
-          positions[seat] = pos_rel_dealer
-        end
-      end
-      @match_state.list_of_hole_card_hands
-    end
-    positions
-  end
-  def order_by_seat_from_dealer_relative(list_of_hole_card_hands, users_seat,
-                                         users_pos_rel_to_dealer)
-    new_list = [].fill Hand.new, (0..list_of_hole_card_hands.length - 1)
-    list_of_hole_card_hands.each_index do |pos_rel_dealer|
-      position_difference = pos_rel_dealer - users_pos_rel_to_dealer
-      seat = (position_difference + users_seat) % list_of_hole_card_hands.length
-      new_list[seat] = list_of_hole_card_hands[pos_rel_dealer]
-    end
-
-    new_list
-  end
-  def init_game_def(type, players)
-    @game_def = mock 'GameDefinition'
-    @game_def.stubs(:first_player_positions).returns(GAME_DEFS[type][:first_player_positions])
-    @game_def.stubs(:number_of_players).returns(players.length)
-    @game_def.stubs(:blinds).returns(GAME_DEFS[type][:blinds])
-    @game_def.stubs(:chip_stacks).returns(players.map { |player| player.chip_stack })
-    @game_def.stubs(:min_wagers).returns(GAME_DEFS[type][:small_bets])
-    @game_def
-  end
   def check_patient(patient=@patient)
     patient.player_acting_sequence.should == @match.player_acting_sequence
     patient.number_of_players.should == @match.players.length
@@ -292,7 +60,11 @@ describe PlayersAtTheTable do
       patient.opponents.players_close_enough?(@match.opponents).should == true
       patient.non_folded_players.players_close_enough?(@match.non_folded_players).should == true
       patient.active_players.players_close_enough?(@match.active_players).should == true
-      
+      patient.player_with_dealer_button.close_enough?(@match.player_with_dealer_button).should == true
+      check_player_blind_relation(patient)
+      patient.chip_stacks.should == @match.chip_stacks
+      patient.chip_balances.should == @match.chip_balances
+      patient.chip_contributions.sum.should == @match.chip_contributions.sum
     end
     patient.opponents_cards_visible?.should == @match.opponents_cards_visible?
     patient.reached_showdown?.should == @match.opponents_cards_visible?
@@ -306,28 +78,65 @@ describe PlayersAtTheTable do
     else
       @match.final_hand?
     end
-
-    if @match.player_with_dealer_button
-      patient.player_with_dealer_button.close_enough?(@match.player_with_dealer_button).should == true
-    else
-      @match.player_with_dealer_button.should == nil
-    end
-
-    # patient.player_blind_relation.should == @player_blind_relation
-    # patient.player_acting_sequence_string.should == @player_acting_sequence_string
-    # patient.users_turn_to_act?.should == @users_turn_to_act
-    # patient.chip_stacks.should == @chip_stacks
-    # patient.chip_balances.should == @chip_balances
-    # patient.betting_sequence.should == @betting_sequence
-    # patient.betting_sequence_string.should == @betting_sequence_string
-    # patient.chip_contributions.should == @chip_contributions
+    patient.player_acting_sequence_string.should == @match.player_acting_sequence_string
+    patient.users_turn_to_act?.should == @match.users_turn_to_act?
+    check_betting_sequence(patient)
+    # @todo Test this eventually
     # patient.min_wager.to_i.should == @min_wager.to_i
+  end
+
+  def check_player_blind_relation(patient)
+    expected_player_blind_relation = @match.player_blind_relation
+    patient.player_blind_relation.each do |player, blind|
+      expected_player_and_blind = expected_player_blind_relation.to_a.find do |player_and_blind| 
+        player_and_blind.first.seat == player.seat
+      end
+
+      expected_player = expected_player_and_blind.first
+      expected_blind = expected_player_and_blind.last
+
+      player.close_enough?(expected_player).should == true
+      blind.should == expected_blind
+    end
+  end
+  def check_betting_sequence(patient)
+    patient_betting_sequence = patient.betting_sequence.map do |actions| 
+        actions.map { |action| action.to_low_res_acpc }
+    end
+    expected_betting_sequence = @match.betting_sequence.map do |actions| 
+      actions.map { |action| action.to_low_res_acpc }
+    end
+    patient_betting_sequence.should == expected_betting_sequence
+    
+    patient.betting_sequence_string.scan(/([a-z]\d*|\/)/).flatten.map do |action| 
+      if action.match(/\//)
+        action
+      else
+        PokerAction.new(action).to_low_res_acpc
+      end
+    end.join('').should == @match.betting_sequence_string
   end
 end
 
+
+# @todo Move these into utils
+
+require 'awesome_print'
+ 
+# @param [#to_s] message The message to log.
+def log_message(message)
+  puts message.to_s
+end
+
+def debug(variables)
+  log_message variables.awesome_inspect
+end
+
+############
+
 class Array
   def players_close_enough?(other_players)
-    puts "length: #{length}, other: #{other_players.length}"
+    # puts "length: #{length}, other: #{other_players.length}"
 
     return false if other_players.length != length
     each_with_index do |player, index|
@@ -344,25 +153,54 @@ end
 
 # @todo Move these into their respective classes
 class PokerMatchData
-  def opponents
-    @players.reject { |other_player| player == other_player }
+  # @todo Untested
+  # @return [String] player acting sequence as a string.
+  def player_acting_sequence_string
+    (player_acting_sequence.map { |per_round| per_round.join('') }).join('/')
   end
-  def active_players
-    @players.select { |player_to_collect| player_to_collect.active? }
+  def users_turn_to_act?
+    return false unless current_hand && current_hand.next_action
+    current_hand.next_action.seat == @seat
   end
-  def non_folded_players
-    @players.reject { |player_to_reject| player_to_reject.folded? }
-  end
-  def opponents_cards_visible?
-    return false unless current_hand
+  def betting_sequence
+    sequence = [[]]
     
-    current_hand.current_match_state.list_of_hole_card_hands.reject_empty_elements.length > 1
+    if (
+      @hand_number.nil? || 
+      current_hand.turn_number.nil? || 
+      current_hand.turn_number < 1
+    )
+      return sequence
+    end
+      
+    turns_taken = current_hand.data[0..current_hand.turn_number-1]
+    turns_taken.each_with_index do |turn, turn_index|
+      next unless turn.action_message
+
+      sequence[turn.action_message.state.round] << turn.action_message.action
+
+      if (
+        new_round?(sequence.length - 1 , turn_index) ||
+        players_all_in?(sequence.length - 1, turn_index, turns_taken)
+      )
+        sequence << []
+      end
+    end
+
+    sequence
   end
-  def player_with_dealer_button
-    ####### @todo This is wrong
-    return nil unless current_hand
-    # @players.find { |player| player.seat == @players.length - 1 }
+  def betting_sequence_string
+    (betting_sequence.map do |per_round|
+       (per_round.map{|action| action.to_acpc}).join('')
+    end).join('/')
   end
+  # @todo Test and implement this
+  # def min_wager
+  #   return nil unless current_hand
+
+  #   @match_def.game_def.min_wagers[current_hand.next_state.round]
+  #   ChipStack.new [@min_wager.to_i, action_with_context.amount_to_put_in_pot.to_i].max
+  # end
 end
 class PokerAction
   # @return [Hash] Map of specific to general actions to more specific actions (e.g. check to call and bet to raise).
@@ -385,12 +223,12 @@ class Player
   end
 
   def close_enough?(other)
-    puts "name: #{name == other.name}"
-    puts "seat: #{seat == other.seat}"
-    puts "chip_stack: #{chip_stack}, other: #{other.chip_stack}"
-    puts "chip balances: #{chip_balance}, other: #{other.chip_balance}"
-    puts "actions_taken_this_hand: #{acpc_actions_taken_this_hand}, other: #{other.acpc_actions_taken_this_hand}"
-    puts "all_in: #{all_in?}, other: #{other.all_in?}"
+    # puts "name: #{name == other.name}"
+    # puts "seat: #{seat == other.seat}"
+    # puts "chip_stack: #{chip_stack}, other: #{other.chip_stack}"
+    # puts "chip balances: #{chip_balance}, other: #{other.chip_balance}"
+    # puts "actions_taken_this_hand: #{acpc_actions_taken_this_hand}, other: #{other.acpc_actions_taken_this_hand}"
+    # puts "all_in: #{all_in?}, other: #{other.all_in?}"
 
 
     @name == other.name &&

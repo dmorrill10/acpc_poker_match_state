@@ -1,3 +1,5 @@
+# @todo Remove this
+require 'awesome_print'
 
 require 'dmorrill10-utils'
 require 'acpc_poker_types'
@@ -179,17 +181,19 @@ class PlayersAtTheTable
     sequence = [[]]
     return sequence unless @transition.next_state
 
-    @player_acting_sequence.each_index do |i|
-      per_round = @player_acting_sequence[i]
-
+    @player_acting_sequence.each_with_index do |per_round, i|
       actions_taken_this_round = {}
-      @players.each do |player|
-        actions_taken_this_round[player.seat] = player.actions_taken_this_hand[i].dup
+
+      unless per_round.empty?
+        @players.each do |player|
+          # Skip if player has folded and a round after the fold is being checked
+          next if i >= player.actions_taken_this_hand.length
+
+          actions_taken_this_round[player.seat] = player.actions_taken_this_hand[i].dup
+        end
       end
 
-      per_round.each_index do |j|
-        seat = per_round[j]
-
+      per_round.each do |seat|
         sequence.last << actions_taken_this_round[seat].shift
       end
       sequence << [] if (@transition.next_state.round+1) > sequence.length
@@ -363,6 +367,7 @@ class PlayersAtTheTable
     )
     player_who_acted_last.take_action! action_with_context
 
+    # @todo I'm concerned that this doesn't work properly in multiplayer...
     @min_wager = ChipStack.new [@min_wager.to_i, action_with_context.amount_to_put_in_pot.to_i].max
 
     if @transition.new_round?
