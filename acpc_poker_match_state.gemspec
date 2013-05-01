@@ -9,7 +9,7 @@ Gem::Specification.new do |s|
   s.homepage    = "https://github.com/dmorrill10/acpc_poker_match_state"
   s.summary     = %q{ACPC Poker Match State}
   s.description = %q{Match state data manager.}
-  
+
   s.add_dependency 'acpc_poker_types'
   s.add_dependency 'dmorrill10-utils'
 
@@ -19,10 +19,11 @@ Gem::Specification.new do |s|
   s.test_files    = Dir.glob "spec/**/*"
   s.require_paths = ["lib"]
 
-  s.add_development_dependency 'rspec'
-  s.add_development_dependency 'mocha'
-  s.add_development_dependency 'simplecov'
+  s.add_development_dependency 'turn'
+  s.add_development_dependency 'minitest'
   s.add_development_dependency 'acpc_dealer_data'
   s.add_development_dependency 'acpc_dealer'
   s.add_development_dependency 'awesome_print'
+  s.add_development_dependency 'pry'
+  s.add_development_dependency 'pry-rescue'
 end

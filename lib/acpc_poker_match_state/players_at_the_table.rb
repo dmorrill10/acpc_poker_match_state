@@ -83,7 +83,7 @@ class PlayersAtTheTable
 
   def next_player_to_act(state=@transition.next_state)
     return nil unless state && !hand_ended? && !active_players.empty?
-      
+
     reference_position = if state.number_of_actions_this_round > 0
       position_relative_to_dealer player_who_acted_last
     else
@@ -386,6 +386,7 @@ class PlayersAtTheTable
     raise NoChipsToDistribute unless pot > 0
     raise NoPlayersToTakeChips unless non_folded_players.length > 0
 
+    # @todo This only works for Doyle's game where there are no side-pots.
     if 1 == non_folded_players.length
       non_folded_players.first.take_winnings! pot
     else
@@ -401,17 +402,13 @@ class PlayersAtTheTable
         hand_strength == strength_of_strongest_hand
       end.map { |player_with_hand_strength| player_with_hand_strength.first }
 
-      amount_each_player_wins = (pot/winning_players.length).floor
+      amount_each_player_wins = pot/winning_players.length.to_r
       winning_players.each do |player|
         player.take_winnings! amount_each_player_wins
       end
-
-      # @todo Keep track of chips remaining in the pot after splitting them if multiplayer
-      #@value -= (amount_each_player_wins * winning_players.length).to_i
     end
   end
 
-  # @todo This only works for Doyle's game where there are no side-pots.
   def pot
     chip_contributions.mapped_sum.sum
   end

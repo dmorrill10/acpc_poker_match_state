@@ -1,7 +1,7 @@
 
-require File.expand_path('../support/spec_helper', __FILE__)
+require_relative 'support/spec_helper'
 
-require File.expand_path('../../lib/acpc_poker_match_state/match_state_transition', __FILE__)
+require_relative '../lib/acpc_poker_match_state/match_state_transition'
 
 describe MatchStateTransition do
 
@@ -11,92 +11,92 @@ describe MatchStateTransition do
 
   describe '#set_next_state!' do
     it 'assigns the new state to be the next state' do
-      new_state = mock 'MatchState'
+      new_state = 'new match state'
 
       @patient.set_next_state! new_state
-      @patient.next_state.should == new_state
+      @patient.next_state.must_equal new_state
     end
     it 'replaces the last state' do
-      last_state = mock 'MatchState'
+      last_state = 'last match state'
 
       @patient.set_next_state! last_state
-      @patient.last_state.should == nil
-      @patient.next_state.should == last_state
+      @patient.last_state.must_equal nil
+      @patient.next_state.must_equal last_state
 
-      next_state = mock 'MatchState'
+      next_state = 'new match state'
 
       @patient.set_next_state! next_state
-      @patient.last_state.should == last_state
-      @patient.next_state.should == next_state
-      @patient.last_state.should_not be next_state
+      @patient.last_state.must_equal last_state
+      @patient.next_state.must_equal next_state
+      @patient.last_state.wont_be_same_as next_state
     end
   end
   describe '#new_round?' do
     it 'raises an exception if it is called before #next_state!' do
-      expect do
+      -> do
         @patient.new_round?
-      end.to raise_exception(MatchStateTransition::NoStateGiven)
+      end.must_raise(MatchStateTransition::NoStateGiven)
     end
     describe 'reports true' do
       it 'when given an initial state' do
-        new_state = mock 'MatchState'
+        new_state = 'new match state'
 
-        @patient.set_next_state!(new_state).new_round?.should == true
+        @patient.set_next_state!(new_state).new_round?.must_equal true
       end
       it 'when subsequently given a state with a later round' do
-        initial_state = mock 'MatchState'
-        initial_state.stubs(:round).returns(0)
+        initial_state = MiniTest::Mock.new
+        initial_state.expect :round, 0
 
         @patient.set_next_state! initial_state
 
-        new_state = mock 'MatchState'
-        new_state.stubs(:round).returns(1)
+        new_state = MiniTest::Mock.new
+        new_state.expect :round, 1
 
-        @patient.set_next_state!(new_state).new_round?.should == true
+        @patient.set_next_state!(new_state).new_round?.must_equal true
       end
       it 'when subsequently given a state with an earlier round' do
-        initial_state = mock 'MatchState'
-        initial_state.stubs(:round).returns(1)
+        initial_state = MiniTest::Mock.new
+        initial_state.expect :round, 1
 
         @patient.set_next_state! initial_state
 
-        new_state = mock 'MatchState'
-        new_state.stubs(:round).returns(0)
+        new_state = MiniTest::Mock.new
+        new_state.expect :round, 0
 
-        @patient.set_next_state!(new_state).new_round?.should == true
+        @patient.set_next_state!(new_state).new_round?.must_equal true
       end
     end
     it 'reports false when subsequently given a state with the same round' do
-      initial_state = mock 'MatchState'
-      initial_state.stubs(:round).returns(0)
+      initial_state = MiniTest::Mock.new
+      initial_state.expect :round, 0
 
       @patient.set_next_state! initial_state
 
-      new_state = mock 'MatchState'
-      new_state.stubs(:round).returns(0)
+      new_state = MiniTest::Mock.new
+      new_state.expect :round, 0
 
-      @patient.set_next_state!(new_state).new_round?.should == false
+      @patient.set_next_state!(new_state).new_round?.must_equal false
     end
   end
   describe '#initial_state?' do
     it 'raises an exception if it is called before #next_state!' do
-      expect do
+      -> do
         @patient.initial_state?
-      end.to raise_exception(MatchStateTransition::NoStateGiven)
+      end.must_raise(MatchStateTransition::NoStateGiven)
     end
     it 'reports true when given a state that reports it is the first ' +
     'state of the first round' do
-      new_state = mock 'MatchState'
-      new_state.stubs(:first_state_of_first_round?).returns(true)
+      new_state = MiniTest::Mock.new
+      new_state.expect :first_state_of_first_round?, true
 
-      @patient.set_next_state!(new_state).initial_state?.should == true
+      @patient.set_next_state!(new_state).initial_state?.must_equal true
     end
     it 'reports false when given a state that reports it is not the ' +
     'first state of the first round' do
-      new_state = mock 'MatchState'
-      new_state.stubs(:first_state_of_first_round?).returns(false)
+      new_state = MiniTest::Mock.new
+      new_state.expect :first_state_of_first_round?, false
 
-      @patient.set_next_state!(new_state).initial_state?.should == false
+      @patient.set_next_state!(new_state).initial_state?.must_equal false
     end
   end
 end
