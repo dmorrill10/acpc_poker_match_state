@@ -15,7 +15,7 @@ Gem::Specification.new do |s|
 
   s.rubyforge_project = "acpc_poker_match_state"
 
-  s.files         = Dir.glob("lib/**/*") + Dir.glob("ext/**/*") + %w(Rakefile acpc_poker_match_state.gemspec tasks.rb README.md)
+  s.files         = Dir.glob("lib/**/*") + Dir.glob("ext/**/*") + %w(Rakefile acpc_poker_match_state.gemspec README.md)
   s.test_files    = Dir.glob "spec/**/*"
   s.require_paths = ["lib"]
 

@@ -261,9 +261,9 @@ class PlayersAtTheTable
 
   def cost_of_action(player, action, round=round_in_which_last_action_taken)
     ChipStack.new(
-      if action.to_sym == :call
+      if action.to_acpc_character == 'c'
         amount_to_call player
-      elsif action.to_sym == :bet || action.to_sym == :raise
+      elsif action.to_acpc_character == 'b' || action.to_acpc_character == 'r'
         if action.modifier
           action.modifier - player.chip_contributions.sum
         else
@@ -277,18 +277,18 @@ class PlayersAtTheTable
 
   # @return [Set] The set of legal actions for the currently acting player.
   def legal_actions
-    list_of_action_symbols = if next_player_to_act.nil?
+    list_of_actions = if next_player_to_act.nil?
       []
     elsif player_sees_wager?
-      [:call, :fold, :raise]
+      ['c', 'f', 'r']
     elsif chips_contributed_to_pot_this_round?
-      [:check, :raise]
+      ['k', 'r']
     else
-      [:check, :bet]
+      ['k', 'b']
     end
 
-    list_of_action_symbols.inject(Set.new) do |set, action_symbol|
-      set << PokerAction.new(action_symbol)
+    list_of_actions.inject(Set.new) do |set, action|
+      set << PokerAction.new(action)
     end
   end
 
@@ -365,10 +365,12 @@ class PlayersAtTheTable
         acting_player_sees_wager: chips_contributed_to_pot_this_round?(@transition.next_state.round_in_which_last_action_taken)
       }
     )
-    player_who_acted_last.take_action! action_with_context
+    unless action_with_context.to_acpc_character == 'f'
+      last_amount_called = amount_to_call(player_who_acted_last)
+      @min_wager = ChipStack.new [@min_wager.to_r, action_with_context.amount_to_put_in_pot.to_r - last_amount_called].max
+    end
 
-    # @todo I'm concerned that this doesn't work properly in multiplayer...
-    @min_wager = ChipStack.new [@min_wager.to_i, action_with_context.amount_to_put_in_pot.to_i].max
+    player_who_acted_last.take_action! action_with_context
 
     if @transition.new_round?
       active_players.each { |player| player.start_new_round! }
@@ -403,6 +405,7 @@ class PlayersAtTheTable
       end.map { |player_with_hand_strength| player_with_hand_strength.first }
 
       amount_each_player_wins = pot/winning_players.length.to_r
+
       winning_players.each do |player|
         player.take_winnings! amount_each_player_wins
       end
