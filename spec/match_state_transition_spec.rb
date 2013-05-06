@@ -1,12 +1,12 @@
 
 require_relative 'support/spec_helper'
 
-require_relative '../lib/acpc_poker_match_state/match_state_transition'
+require 'acpc_poker_match_state/match_state_transition'
 
-describe MatchStateTransition do
+describe AcpcPokerMatchState::MatchStateTransition do
 
   before(:each) do
-    @patient = MatchStateTransition.new
+    @patient = AcpcPokerMatchState::MatchStateTransition.new
   end
 
   describe '#set_next_state!' do
@@ -35,7 +35,7 @@ describe MatchStateTransition do
     it 'raises an exception if it is called before #next_state!' do
       -> do
         @patient.new_round?
-      end.must_raise(MatchStateTransition::NoStateGiven)
+      end.must_raise(AcpcPokerMatchState::MatchStateTransition::NoStateGiven)
     end
     describe 'reports true' do
       it 'when given an initial state' do
@@ -82,7 +82,7 @@ describe MatchStateTransition do
     it 'raises an exception if it is called before #next_state!' do
       -> do
         @patient.initial_state?
-      end.must_raise(MatchStateTransition::NoStateGiven)
+      end.must_raise(AcpcPokerMatchState::MatchStateTransition::NoStateGiven)
     end
     it 'reports true when given a state that reports it is the first ' +
     'state of the first round' do

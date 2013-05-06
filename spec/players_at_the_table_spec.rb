@@ -1,21 +1,21 @@
 
-require File.expand_path('../support/spec_helper', __FILE__)
+require_relative 'support/spec_helper'
 
 require 'acpc_dealer'
-require 'acpc_dealer_data'
+require 'acpc_poker_types/poker_action'
+require 'acpc_poker_match_state/players_at_the_table'
 
-require File.expand_path('../../lib/acpc_poker_match_state/players_at_the_table', __FILE__)
-
-describe PlayersAtTheTable do
+describe AcpcPokerMatchState::PlayersAtTheTable do
   describe '#update!' do
     it "keeps track of state for a sequence of match states and actions in Doyle's game" do
       # Change this number to do more or less thorough tests.
       # Some interesting three player hands occur after 120
       # Careful though, even 10 hands takes about five seconds,
-      # and it scales about linearly
-      num_hands = 10
+      # and it scales slightly less than linearly. 120 takes
+      # about 50 seconds.
+      num_hands = 120
       match_logs.each do |log_description|
-        @match = PokerMatchData.parse_files(
+        @match = AcpcPokerTypes::AcpcDealerData::PokerMatchData.parse_files(
           log_description.actions_file_path,
           log_description.results_file_path,
           log_description.player_names,
@@ -24,7 +24,7 @@ describe PlayersAtTheTable do
         )
         @match.for_every_seat! do |users_seat|
 
-          @patient = PlayersAtTheTable.seat_players(
+          @patient = AcpcPokerMatchState::PlayersAtTheTable.seat_players(
             @match.match_def.game_def,
             (@match.players.map{ |player| player.name }),
             users_seat,
@@ -89,10 +89,10 @@ describe PlayersAtTheTable do
   end
   def check_betting_sequence(patient)
     patient_betting_sequence = patient.betting_sequence.map do |actions|
-        actions.map { |action| action.to_low_res_acpc }
+      actions.map { |action| AcpcPokerTypes::PokerAction.new(action).to_s }
     end
     expected_betting_sequence = @match.betting_sequence.map do |actions|
-      actions.map { |action| action.to_low_res_acpc }
+      actions.map { |action| AcpcPokerTypes::PokerAction.new(action).to_s }
     end
     patient_betting_sequence.must_equal expected_betting_sequence
 
@@ -100,7 +100,7 @@ describe PlayersAtTheTable do
       if action.match(/\//)
         action
       else
-        PokerAction.new(action).to_low_res_acpc
+        AcpcPokerTypes::PokerAction.new(action).to_s
       end
     end.join('').must_equal @match.betting_sequence_string
   end
@@ -120,6 +120,7 @@ describe PlayersAtTheTable do
   end
   def check_last_turn(patient=@patient)
     return unless @match.current_hand && @match.current_hand.final_turn?
+
     patient.players.players_close_enough?(@match.players).must_equal true
     patient.user_player.close_enough?(@match.player).must_equal true
     patient.opponents.players_close_enough?(@match.opponents).must_equal true
@@ -148,18 +149,10 @@ class Array
   end
 end
 
-class PokerAction
-  # @return [Hash] Map of specific to general actions to more specific actions (e.g. check to call and bet to raise).
-  LOW_RESOLUTION_ACTION_CONVERSION = {call: :call, raise: :raise, fold: :fold, check: :call, bet: :raise}
-
-  def to_low_res_acpc
-    LEGAL_ACTIONS[LOW_RESOLUTION_ACTION_CONVERSION[@symbol]] + @modifier.to_s
-  end
-end
-class Player
+class AcpcPokerTypes::Player
   def acpc_actions_taken_this_hand
     acpc_actions = @actions_taken_this_hand.map do |actions_per_turn|
-      actions_per_turn.map { |action| action.to_low_res_acpc }
+      actions_per_turn.map { |action| AcpcPokerTypes::PokerAction.new(action).to_s }
     end
     if acpc_actions.first.empty?
       acpc_actions
@@ -169,21 +162,6 @@ class Player
   end
 
   def close_enough?(other)
-
-    unless (@name == other.name &&
-    @seat == other.seat &&
-    @chip_stack == other.chip_stack &&
-    @chip_balance == other.chip_balance &&
-    acpc_actions_taken_this_hand == other.acpc_actions_taken_this_hand)
-      puts "name: #{name == other.name}"
-      puts "seat: #{seat == other.seat}"
-      puts "chip_stack: #{chip_stack}, other: #{other.chip_stack}"
-      puts "chip balances: #{chip_balance}, other: #{other.chip_balance}"
-      puts "actions_taken_this_hand: #{acpc_actions_taken_this_hand}, other: #{other.acpc_actions_taken_this_hand}"
-      puts "all_in: #{all_in?}, other: #{other.all_in?}"
-    end
-
-
     @name == other.name &&
     @seat == other.seat &&
     @chip_stack == other.chip_stack &&
