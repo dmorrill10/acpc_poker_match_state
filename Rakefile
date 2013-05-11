@@ -3,11 +3,11 @@ require 'bundler/gem_tasks'
 require 'rake'
 require 'rake/testtask'
 
-require File.expand_path('../lib/acpc_poker_match_state/version', __FILE__)
+require 'acpc_poker_match_state/version'
 
 Rake::TestTask.new do |t|
   t.libs << "lib" << 'spec/support'
   t.test_files = FileList['spec/**/*_spec.rb']
-  t.verbose = true
-  t.warning = true
+  t.verbose = false
+  t.warning = false
 end

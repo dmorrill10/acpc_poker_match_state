@@ -1,5 +1,7 @@
-require 'dmorrill10-utils/class'
 require 'acpc_poker_types/match_state'
+
+require 'contextual_exceptions'
+using ContextualExceptions::ClassRefinement
 
 module AcpcPokerMatchState
   class MatchStateTransition

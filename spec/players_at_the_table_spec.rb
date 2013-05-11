@@ -130,7 +130,7 @@ describe AcpcPokerMatchState::PlayersAtTheTable do
     check_player_blind_relation(patient)
     patient.chip_stacks.must_equal @match.chip_stacks
     patient.chip_balances.must_equal @match.chip_balances
-    patient.chip_contributions.sum.must_equal @match.chip_contributions.sum
+    patient.chip_contributions.inject(:+).must_equal @match.chip_contributions.inject(:+)
   end
 end
 

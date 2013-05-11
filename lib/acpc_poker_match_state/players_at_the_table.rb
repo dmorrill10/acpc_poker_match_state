@@ -1,7 +1,10 @@
-require 'dmorrill10-utils/class'
-
 require 'acpc_poker_types'
 require 'acpc_poker_match_state/match_state_transition'
+
+require 'contextual_exceptions'
+using ContextualExceptions::ClassRefinement
+require 'acpc_poker_types/integer_as_seat'
+using AcpcPokerTypes::IntegerAsSeat
 
 module AcpcPokerMatchState
   class PlayersAtTheTable
@@ -28,7 +31,7 @@ module AcpcPokerMatchState
 
     attr_reader :player_who_acted_last
 
-    alias_new :seat_players
+    class << self; alias_method(:seat_players, :new) end
 
     # @param [GameDefinition] game_def The game definition for the
     #  match these players are playing.
@@ -253,8 +256,8 @@ module AcpcPokerMatchState
 
     def amount_to_call(player)
       @players.map do |p|
-        p.chip_contributions.sum
-      end.max - player.chip_contributions.sum
+        p.chip_contributions.inject(:+)
+      end.max - player.chip_contributions.inject(:+)
     end
 
     def cost_of_action(player, action, round=@transition.next_state.round_in_which_last_action_taken)
@@ -263,7 +266,7 @@ module AcpcPokerMatchState
           amount_to_call player
         elsif action.action == AcpcPokerTypes::PokerAction::BET || action.action == AcpcPokerTypes::PokerAction::RAISE
           if action.modifier
-            action.modifier.to_i - player.chip_contributions.sum
+            action.modifier.to_i - player.chip_contributions.inject(:+)
           else
             @game_def.min_wagers[round] + amount_to_call(player)
           end
@@ -398,7 +401,7 @@ module AcpcPokerMatchState
     end
 
     def pot
-      chip_contributions.mapped_sum.sum
+      chip_contributions.inject(0) { |sum, sub_array| sum += sub_array.inject(:+) }
     end
 
     def set_min_wager!
