@@ -7,6 +7,22 @@ require 'acpc_poker_types/integer_as_seat'
 using AcpcPokerTypes::IntegerAsSeat
 
 module AcpcPokerMatchState
+  module ConvenienceArrayMethods
+    refine Array do
+      def find_out_of_bounds_seat(number_of_players)
+        self.find do |position|
+          !position.seat_in_bounds?(number_of_players)
+        end
+      end
+      def copy
+        inject([]) { |new_array, elem| new_array << elem.copy }
+      end
+    end
+  end
+end
+using AcpcPokerMatchState::ConvenienceArrayMethods
+
+module AcpcPokerMatchState
   class PlayersAtTheTable
 
     exceptions :player_acted_before_sitting_at_table,
@@ -401,22 +417,11 @@ module AcpcPokerMatchState
     end
 
     def pot
-      chip_contributions.inject(0) { |sum, sub_array| sum += sub_array.inject(:+) }
+      chip_contributions.flatten.inject(:+)
     end
 
     def set_min_wager!
       @min_wager = @game_def.min_wagers[@transition.next_state.round]
-    end
-  end
-
-  class Array
-    def find_out_of_bounds_seat(number_of_players)
-      self.find do |position|
-        !position.seat_in_bounds?(number_of_players)
-      end
-    end
-    def copy
-      inject([]) { |new_array, elem| new_array << elem.copy }
     end
   end
 end

@@ -10,10 +10,10 @@ describe AcpcPokerMatchState::PlayersAtTheTable do
     it "keeps track of state for a sequence of match states and actions in Doyle's game" do
       # Change this number to do more or less thorough tests.
       # Some interesting three player hands occur after 120
-      # Careful though, even 10 hands takes about five seconds,
+      # Careful though, even 10 hands takes about three seconds,
       # and it scales slightly less than linearly. 120 takes
-      # about 50 seconds.
-      num_hands = 120
+      # about 30 seconds.
+      num_hands = 10
       match_logs.each do |log_description|
         @match = AcpcPokerTypes::AcpcDealerData::PokerMatchData.parse_files(
           log_description.actions_file_path,
@@ -130,7 +130,7 @@ describe AcpcPokerMatchState::PlayersAtTheTable do
     check_player_blind_relation(patient)
     patient.chip_stacks.must_equal @match.chip_stacks
     patient.chip_balances.must_equal @match.chip_balances
-    patient.chip_contributions.inject(:+).must_equal @match.chip_contributions.inject(:+)
+    patient.chip_contributions.flatten.inject(:+).must_equal @match.chip_contributions.flatten.inject(:+)
   end
 end
 
