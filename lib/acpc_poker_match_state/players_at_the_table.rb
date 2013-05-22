@@ -373,7 +373,7 @@ module AcpcPokerMatchState
       player_who_acted_last.take_action!(
         action_with_context,
         pot_gained_chips: chips_contributed_to_pot_this_round?(@transition.next_state.round_in_which_last_action_taken),
-        sees_wager: player_sees_wager?
+        sees_wager: player_sees_wager?(player_who_acted_last)
       )
 
       if @transition.new_round?

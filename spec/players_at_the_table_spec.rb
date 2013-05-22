@@ -3,6 +3,7 @@ require_relative 'support/spec_helper'
 
 require 'acpc_dealer'
 require 'acpc_poker_types/poker_action'
+require 'acpc_poker_types/card'
 require 'acpc_poker_match_state/players_at_the_table'
 
 describe AcpcPokerMatchState::PlayersAtTheTable do
@@ -58,6 +59,13 @@ describe AcpcPokerMatchState::PlayersAtTheTable do
     if @match.current_hand
       patient.hand_ended?.must_equal @match.current_hand.final_turn?
       patient.match_ended?.must_equal (@match.final_hand? && @match.current_hand.final_turn?)
+      unless @match.current_hand.final_turn?
+        patient.transition.next_state.list_of_hole_card_hands.each do |hand|
+          hand.each do |card|
+            card.must_be_kind_of AcpcPokerTypes::Card
+          end
+        end
+      end
     end
     patient.last_hand?.must_equal (
       if @match.final_hand?.nil?
@@ -74,27 +82,27 @@ describe AcpcPokerMatchState::PlayersAtTheTable do
   end
 
   def check_player_blind_relation(patient)
-    expected_player_blind_relation = @match.player_blind_relation
+    x_player_blind_relation = @match.player_blind_relation
     patient.player_blind_relation.each do |player, blind|
-      expected_player_and_blind = expected_player_blind_relation.to_a.find do |player_and_blind|
+      x_player_and_blind = x_player_blind_relation.to_a.find do |player_and_blind|
         player_and_blind.first.seat == player.seat
       end
 
-      expected_player = expected_player_and_blind.first
-      expected_blind = expected_player_and_blind.last
+      x_player = x_player_and_blind.first
+      x_blind = x_player_and_blind.last
 
-      player.close_enough?(expected_player).must_equal true
-      blind.must_equal expected_blind
+      player.close_enough?(x_player).must_equal true
+      blind.must_equal x_blind
     end
   end
   def check_betting_sequence(patient)
     patient_betting_sequence = patient.betting_sequence.map do |actions|
       actions.map { |action| AcpcPokerTypes::PokerAction.new(action).to_s }
     end
-    expected_betting_sequence = @match.betting_sequence.map do |actions|
+    x_betting_sequence = @match.betting_sequence.map do |actions|
       actions.map { |action| AcpcPokerTypes::PokerAction.new(action).to_s }
     end
-    patient_betting_sequence.must_equal expected_betting_sequence
+    patient_betting_sequence.must_equal x_betting_sequence
 
     patient.betting_sequence_string.scan(/([a-z]\d*|\/)/).flatten.map do |action|
       if action.match(/\//)
