@@ -48,7 +48,7 @@ describe AcpcPokerMatchState::PlayersAtTheTable do
 
   def check_patient(patient=@patient)
     patient.player_acting_sequence.must_equal @match.player_acting_sequence
-    patient.number_of_players.must_equal @match.players.length
+    patient.players.length.must_equal @match.players.length
     check_last_action
     check_next_to_act
     check_last_turn

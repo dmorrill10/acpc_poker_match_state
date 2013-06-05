@@ -3,31 +3,11 @@ require 'acpc_poker_match_state/match_state_transition'
 
 require 'contextual_exceptions'
 using ContextualExceptions::ClassRefinement
-require 'acpc_poker_types/integer_as_seat'
-using AcpcPokerTypes::IntegerAsSeat
-
-module AcpcPokerMatchState
-  module ConvenienceArrayMethods
-    refine Array do
-      def find_out_of_bounds_seat(number_of_players)
-        self.find do |position|
-          !position.seat_in_bounds?(number_of_players)
-        end
-      end
-      def copy
-        inject([]) { |new_array, elem| new_array << elem.copy }
-      end
-    end
-  end
-end
-using AcpcPokerMatchState::ConvenienceArrayMethods
 
 module AcpcPokerMatchState
   class PlayersAtTheTable
-
     exceptions :player_acted_before_sitting_at_table,
-      :no_players_to_seat, :users_seat_out_of_bounds,
-      :multiple_players_have_the_same_seat
+      :no_players_to_seat, :multiple_players_have_the_same_seat
 
     attr_reader :players
 
@@ -59,14 +39,10 @@ module AcpcPokerMatchState
     def initialize(game_def, player_names, users_seat, number_of_hands)
       @players = AcpcPokerTypes::Player.create_players player_names, game_def
 
-      @users_seat = if users_seat.seat_in_bounds?(number_of_players) && @players.any?{|player| player.seat == users_seat}
-        users_seat
-      else
-        raise UsersSeatOutOfBounds, users_seat
-      end
+      @users_seat = AcpcPokerTypes::Seat.new(users_seat, player_names.length)
 
       @game_def = game_def
-      @min_wager = @game_def.min_wagers.first
+      @min_wager = game_def.min_wagers.first
 
       @transition = AcpcPokerMatchState::MatchStateTransition.new
 
@@ -74,13 +50,6 @@ module AcpcPokerMatchState
 
       @number_of_hands = number_of_hands
     end
-
-    def blinds
-      @game_def.blinds
-    end
-
-    # @return [Integer] The number of players seated at the table.
-    def number_of_players() @players.length end
 
     # @param [MatchState] match_state The next match state.
     def update!(match_state)
@@ -107,8 +76,8 @@ module AcpcPokerMatchState
         @game_def.first_player_positions[state.round] - 1
       end
 
-      number_of_players.times.inject(nil) do |player_who_might_act, i|
-        position_relative_to_dealer_to_act = (reference_position + i + 1) % number_of_players
+      @players.length.times.inject(nil) do |player_who_might_act, i|
+        position_relative_to_dealer_to_act = (reference_position + i + 1) % @players.length
         player_who_might_act = active_players.find do |player|
           position_relative_to_dealer(player) == position_relative_to_dealer_to_act
         end
@@ -170,7 +139,7 @@ module AcpcPokerMatchState
     # @return [AcpcPokerTypes::Player] The player with the dealer button.
     def player_with_dealer_button
       return nil unless @transition.next_state
-      @players.find { |player| position_relative_to_dealer(player) == number_of_players - 1}
+      @players.find { |player| position_relative_to_dealer(player) == @players.length - 1}
     end
 
     # @return [Hash<AcpcPokerTypes::Player, #to_i] Relation from player to the blind that player paid.
@@ -178,7 +147,7 @@ module AcpcPokerMatchState
       return nil unless @transition.next_state
 
       @players.inject({}) do |relation, player|
-        relation[player] = blinds[position_relative_to_dealer(player)]
+        relation[player] = @game_def.blinds[position_relative_to_dealer(player)]
         relation
       end
     end
@@ -246,14 +215,14 @@ module AcpcPokerMatchState
     #  dealer is desired.
     # @return [Integer] The position relative to the user of the given player,
     #  +player+, indexed such that the player immediately to the left of the
-    #  dealer has a +position_relative_to_dealer+ of zero.
+    #  user has a +position_relative_to_user+ of zero.
     # @example The player immediately to the left of the user has
     #     +position_relative_to_user+ == 0
     # @example The user has
-    #     +position_relative_to_user+ == +number_of_players+ - 1
+    #     +position_relative_to_user+ == +@players.length+ - 1
     # @raise (see Integer#position_relative_to)
     def position_relative_to_user(player)
-      player.seat.position_relative_to user_player.seat, number_of_players
+      @users_seat.n_seats_away(1).seats_to player.seat
     end
 
     # @param [Integer] player The player of which the position relative to the
@@ -264,10 +233,18 @@ module AcpcPokerMatchState
     # @raise (see Integer#seat_from_relative_position)
     # @raise (see Integer#position_relative_to)
     def position_relative_to_dealer(player)
-      seat_of_dealer = @users_seat.seat_from_relative_position(
-      users_position_relative_to_dealer, number_of_players)
+      seats_from_dealer = (users_position_relative_to_dealer + 1) % @players.length
 
-      player.seat.position_relative_to seat_of_dealer, number_of_players
+      dealers_seat = AcpcPokerTypes::Seat.new(
+        if @users_seat < seats_from_dealer
+          @players.length
+        else
+          0
+        end + @users_seat - seats_from_dealer,
+        @players.length
+      )
+
+      dealers_seat.n_seats_away(1).seats_to(player.seat)
     end
 
     def amount_to_call(player)
@@ -340,7 +317,7 @@ module AcpcPokerMatchState
 
       @players.each do |player|
         player.start_new_hand!(
-          blinds[position_relative_to_dealer(player)],
+          @game_def.blinds[position_relative_to_dealer(player)],
           @game_def.chip_stacks[position_relative_to_dealer(player)], # @todo if playing Doyle's game
           @transition.next_state.list_of_hole_card_hands[position_relative_to_dealer(player)]
         )
