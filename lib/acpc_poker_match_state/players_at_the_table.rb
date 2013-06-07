@@ -23,6 +23,7 @@ module AcpcPokerMatchState
 
     attr_reader :users_seat
 
+    # @return [ChipStack] Minimum wager by.
     attr_reader :min_wager
 
     attr_reader :player_who_acted_last
@@ -247,7 +248,7 @@ module AcpcPokerMatchState
       dealers_seat.n_seats_away(1).seats_to(player.seat)
     end
 
-    def amount_to_call(player)
+    def amount_to_call(player = next_player_to_act)
       @players.map do |p|
         p.chip_contributions.inject(:+)
       end.max - player.chip_contributions.inject(:+)
@@ -275,13 +276,38 @@ module AcpcPokerMatchState
         if next_player_to_act.nil?
           []
         elsif player_sees_wager?
-          [AcpcPokerTypes::PokerAction::CALL, AcpcPokerTypes::PokerAction::FOLD, AcpcPokerTypes::PokerAction::RAISE]
+          actions_without_wager = [
+            AcpcPokerTypes::PokerAction::CALL,
+            AcpcPokerTypes::PokerAction::FOLD
+          ]
+
+          if wager_legal?
+            actions_without_wager << AcpcPokerTypes::PokerAction::RAISE
+          else
+            actions_without_wager
+          end
         elsif chips_contributed_to_pot_this_round?
-          [AcpcPokerTypes::PokerAction::CHECK, AcpcPokerTypes::PokerAction::RAISE]
+          actions_without_wager = [AcpcPokerTypes::PokerAction::CHECK]
+
+          if wager_legal?
+            actions_without_wager << AcpcPokerTypes::PokerAction::RAISE
+          else
+            actions_without_wager
+          end
         else
-          [AcpcPokerTypes::PokerAction::CHECK, AcpcPokerTypes::PokerAction::BET]
+          actions_without_wager = [AcpcPokerTypes::PokerAction::CHECK]
+
+          if wager_legal?
+            actions_without_wager << AcpcPokerTypes::PokerAction::BET
+          else
+            actions_without_wager
+          end
         end
       )
+    end
+
+    def wager_legal?
+      next_player_to_act.chip_contributions.inject(:+) + amount_to_call < @game_def.chip_stacks[position_relative_to_dealer(next_player_to_act)]
     end
 
     # @return [Boolean] +true+ if the current hand is the last in the match.
@@ -290,6 +316,19 @@ module AcpcPokerMatchState
       return false unless @transition.next_state
 
       @transition.next_state.hand_number == @number_of_hands - 1
+    end
+
+    def big_blind
+      player_blind_relation.values.max
+    end
+    def big_blind_payer
+      player_blind_relation.key big_blind
+    end
+    def small_blind
+      player_blind_relation.values.sort[-2]
+    end
+    def small_blind_payer
+      player_blind_relation.key small_blind
     end
 
     private
@@ -344,7 +383,12 @@ module AcpcPokerMatchState
       )
       unless action_with_context.to_s == 'f'
         last_amount_called = amount_to_call(player_who_acted_last)
-        @min_wager = AcpcPokerTypes::ChipStack.new [@min_wager.to_r, action_with_context.cost.to_r - last_amount_called].max
+        @min_wager = AcpcPokerTypes::ChipStack.new(
+          [
+            @min_wager.to_r,
+            action_with_context.cost.to_r - last_amount_called
+          ].max
+        )
       end
 
       player_who_acted_last.take_action!(
