@@ -306,8 +306,16 @@ module AcpcPokerMatchState
       )
     end
 
-    def wager_legal?
-      next_player_to_act.chip_contributions.inject(:+) + amount_to_call < @game_def.chip_stacks[position_relative_to_dealer(next_player_to_act)]
+    def wager_legal?(player = next_player_to_act)
+      !facing_all_in?(player)
+    end
+
+    def facing_all_in?(player = next_player_to_act)
+      chip_contributions_after_calling(player) >= @game_def.chip_stacks[position_relative_to_dealer(player)]
+    end
+
+    def chip_contributions_after_calling(player = next_player_to_act)
+      player.chip_contributions.inject(:+) + amount_to_call(player)
     end
 
     # @return [Boolean] +true+ if the current hand is the last in the match.
