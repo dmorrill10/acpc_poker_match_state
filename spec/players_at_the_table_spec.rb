@@ -54,13 +54,13 @@ describe AcpcPokerMatchState::PlayersAtTheTable do
     check_last_turn
     patient.opponents_cards_visible?.must_equal @match.opponents_cards_visible?
     patient.reached_showdown?.must_equal @match.opponents_cards_visible?
-    patient.less_than_two_non_folded_players?.must_equal @match.non_folded_players.length < 2
+    # patient.less_than_two_non_folded_players?.must_equal @match.non_folded_players.length < 2
 
     if @match.current_hand
       patient.hand_ended?.must_equal @match.current_hand.final_turn?
       patient.match_ended?.must_equal (@match.final_hand? && @match.current_hand.final_turn?)
       unless @match.current_hand.final_turn?
-        patient.transition.next_state.list_of_hole_card_hands.each do |hand|
+        patient.transition.next_state.all_hands.each do |hand|
           hand.each do |card|
             card.must_be_kind_of AcpcPokerTypes::Card
           end
@@ -132,7 +132,7 @@ describe AcpcPokerMatchState::PlayersAtTheTable do
     patient.players.players_close_enough?(@match.players).must_equal true
     patient.user_player.close_enough?(@match.player).must_equal true
     patient.opponents.players_close_enough?(@match.opponents).must_equal true
-    patient.non_folded_players.players_close_enough?(@match.non_folded_players).must_equal true
+    # patient.non_folded_players.players_close_enough?(@match.non_folded_players).must_equal true
     patient.active_players.players_close_enough?(@match.active_players).must_equal true
     patient.player_with_dealer_button.close_enough?(@match.player_with_dealer_button).must_equal true
     check_player_blind_relation(patient)
