@@ -28,11 +28,10 @@ class NilHandPlayer < AcpcPokerTypes::HandPlayer
 end
 
 class Player < DelegateClass(AcpcPokerTypes::HandPlayer)
-  attr_reader :name, :seat, :hand_player
+  attr_reader :seat, :hand_player
   attr_accessor :balance
 
-  def initialize(name, seat)
-    @name = name
+  def initialize(seat)
     @seat = seat
     @balance = 0
     @hand_player = NilHandPlayer.new

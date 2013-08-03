@@ -1,5 +1,6 @@
-require 'acpc_poker_types'
-require 'acpc_poker_match_state/match_state_transition'
+require 'acpc_poker_types/seat'
+require 'acpc_poker_types/poker_action'
+require 'acpc_poker_match_state/player'
 
 require 'contextual_exceptions'
 using ContextualExceptions::ClassRefinement
@@ -31,102 +32,45 @@ class PlayersAtTheTable
 
   attr_reader :players
 
-  attr_reader :transition
+  attr_reader :match_state
 
   attr_reader :number_of_hands
 
   attr_reader :game_def
 
-  attr_reader :users_seat
-
-  # @return [ChipStack] Minimum wager by.
-  attr_reader :min_wager
-
-  attr_reader :player_who_acted_last
-
   class << self; alias_method(:seat_players, :new) end
+
+  # @todo Remove dependence on player_names users_seat, and number_of_hands
 
   # @param [GameDefinition] game_def The game definition for the
   #  match these players are playing.
-  # @param [Array<String>] player_names The names of the players to seat at the table,
-  #  ordered by seat.
-  # @param [Integer] users_seat The user's seat at the table.
-  #  players are joining.
   # @param [Integer] number_of_hands The number of hands in this match.
-  def initialize(game_def, player_names, users_seat, number_of_hands)
-    @players = player_names.map_with_index { |name, i| Player.new(name, i) }
+  def initialize(game_def, number_of_hands)
+    @players = game_def.number_of_players.times.map do |i|
+      Player.new(
+        Seat.new(i, game_def.number_of_players)
+      )
+    end
 
-    @users_seat = AcpcPokerTypes::Seat.new(users_seat, player_names.length)
+    @users_seat = Seat.new(0, game_def.number_of_players)
 
     @game_def = game_def
-    @min_wager = game_def.min_wagers.first
-
-    @transition = AcpcPokerMatchState::MatchStateTransition.new
 
     @number_of_hands = number_of_hands
   end
 
   # @param [MatchState] match_state The next match state.
   def update!(match_state)
-    @transition.set_next_state! match_state
+    @match_state = match_state
 
-    if @transition.initial_state?
-      start_new_hand!
-    else
-      update_state_of_players!
-    end
-    self
-  end
-
-  def next_player_to_act(state=@transition.next_state)
-    return nil unless state && !hand_ended? && !active_players.empty?
-
-    reference_position = if state.number_of_actions_this_round > 0
-      position_relative_to_dealer player_who_acted_last
-    else
-      @game_def.first_player_positions[state.round] - 1
-    end
-
-    @players.length.times.inject(nil) do |player_who_might_act, i|
-      position_relative_to_dealer_to_act = (reference_position + i + 1) % @players.length
-      player_who_might_act = active_players.find do |player|
-        position_relative_to_dealer(player) == position_relative_to_dealer_to_act
-      end
-      if player_who_might_act then break player_who_might_act else nil end
-    end
-  end
-
-  def player_who_acted_last
-    unless @transition.next_state && @transition.next_state.round_in_which_last_action_taken
-      nil
-    else
-      @players.find do |player|
-        player.seat == player_acting_sequence[@transition.next_state.round_in_which_last_action_taken].last
-      end
-    end
-  end
-
-  def opponents
-    @players.select { |player| player.seat != @users_seat }
-  end
-
-  def user_player
-    @players.find { |player| @users_seat == player.seat }
-  end
-
-  # @return [Array<Player>] The players who are active.
-  def active_players
-    @players.select { |player| !player.inactive? }
-  end
-
-  #@return [Array<Player>] The players who have not folded.
-  def non_folded_players
-    @players.select { |player| !player.folded? }
+    update_players!
   end
 
   # @return [Boolean] +true+ if the hand has ended, +false+ otherwise.
   def hand_ended?
-    less_than_two_non_folded_players? || reached_showdown?
+    return false unless @match_state
+
+    @match_state.hand_ended? @game_def
   end
 
   # @return [Boolean] +true+ if the match has ended, +false+ otherwise.
@@ -134,106 +78,38 @@ class PlayersAtTheTable
     hand_ended? && last_hand?
   end
 
-  def less_than_two_non_folded_players?
-    non_folded_players.length < 2
-  end
-
-  def reached_showdown?
-    opponents_cards_visible?
-  end
-
-  # @return [Boolean] +true+ if any opponents cards are visible, +false+ otherwise.
-  def opponents_cards_visible?
-    opponents.any? { |player| player.hand && !player.hand.empty? }
-  end
-
   # @return [Player] The player with the dealer button.
-  def player_with_dealer_button
-    return nil unless @transition.next_state
+  def dealer_player
+    return nil unless @match_state
     @players.find { |player| position_relative_to_dealer(player) == @players.length - 1}
   end
-
-  # @return [Hash<Player, #to_i] Relation from player to the blind that player paid.
-  def player_blind_relation
-    return nil unless @transition.next_state
-
-    @players.inject({}) do |relation, player|
-      relation[player] = @game_def.blinds[position_relative_to_dealer(player)]
-      relation
+  def big_blind_payer
+    @players.find do |plyr|
+      position_relative_to_dealer(plyr) == @game_def.blinds.index(@game_def.blinds.max)
     end
   end
-
-  # @return [String] player acting sequence as a string.
-  def player_acting_sequence_string
-    (player_acting_sequence.map { |per_round| per_round.join('') }).join('/')
-  end
-
-  def betting_sequence_string
-    (betting_sequence.map do |per_round|
-       (per_round.map{|action| action.to_s}).join('')
-    end).join('/')
-  end
-
-  def betting_sequence
-    sequence = [[]]
-    return sequence unless @transition.next_state
-
-    player_acting_sequence.each_with_index do |per_round, i|
-      actions_taken_this_round = {}
-
-      unless per_round.empty?
-        @players.each do |player|
-          # Skip if player has folded and a round after the fold is being checked
-          next if i >= player.actions_taken_this_hand.length
-
-          actions_taken_this_round[player.seat] = player.actions_taken_this_hand[i].dup
+  def small_blind_payer
+    @players.find do |plyr|
+      position_relative_to_dealer(plyr) == (
+        @game_def.blinds.index do |blind|
+          blind < @match.match_def.game_def.blinds.max && blind > 0
         end
-      end
-
-      per_round.each do |seat|
-        sequence.last << actions_taken_this_round[seat].shift
-      end
-      sequence << [] if (@transition.next_state.round+1) > sequence.length
+      )
     end
-    sequence
+  end
+  def next_player_to_act
+    return nil if @match_state.nil? || hand_ended?
+
+    ap next_to_act: @match_state.next_to_act(@game_def)
+
+    @players.find { |plyr| position_relative_to_dealer(plyr) == @match_state.next_to_act(@game_def) }
   end
 
   # @return [Boolean] +true+ if it is the user's turn to act, +false+ otherwise.
   def users_turn_to_act?
-    if next_player_to_act
-      next_player_to_act.seat == @users_seat
-    else
-      false
-    end
-  end
+    return false if @match_state.nil? || hand_ended?
 
-  # @return [Array<ChipStack>] Player stacks.
-  def chip_stacks
-    @players.map { |player| player.chip_stack }
-  end
-
-  # return [Array<Integer>] Each player's current chip balance.
-  def chip_balances
-    @players.map { |player| player.chip_balance }
-  end
-
-  # return [Array<Array<Integer>>] Each player's current chip contribution organized by round.
-  def chip_contributions
-    @players.map { |player| player.chip_contributions }
-  end
-
-  # @param [Integer] player The player of which the position relative to the
-  #  dealer is desired.
-  # @return [Integer] The position relative to the user of the given player,
-  #  +player+, indexed such that the player immediately to the left of the
-  #  user has a +position_relative_to_user+ of zero.
-  # @example The player immediately to the left of the user has
-  #     +position_relative_to_user+ == 0
-  # @example The user has
-  #     +position_relative_to_user+ == +@players.length+ - 1
-  # @raise (see Integer#position_relative_to)
-  def position_relative_to_user(player)
-    @users_seat.n_seats_away(1).seats_to player.seat
+    next_player_to_act.seat == @users_seat
   end
 
   # @param [Integer] player The player of which the position relative to the
@@ -244,169 +120,55 @@ class PlayersAtTheTable
   # @raise (see Integer#seat_from_relative_position)
   # @raise (see Integer#position_relative_to)
   def position_relative_to_dealer(player)
-    seats_from_dealer = (users_position_relative_to_dealer + 1) % @players.length
-
-    dealers_seat = AcpcPokerTypes::Seat.new(
-      if @users_seat < seats_from_dealer
-        @players.length
-      else
-        0
-      end + @users_seat - seats_from_dealer,
-      @players.length
-    )
-
-    dealers_seat.n_seats_away(1).seats_to(player.seat)
+    (@users_seat.seats_to(player) + users_position_relative_to_dealer) % @players.length
   end
 
-  def amount_to_call(player = next_player_to_act)
-    @players.map do |p|
-      p.chip_contributions.inject(:+)
-    end.max - player.chip_contributions.inject(:+)
-  end
-
-  def cost_of_action(player, action, round=@transition.next_state.round_in_which_last_action_taken)
-    ChipStack.new(
-      if action.action == PokerAction::CALL
-        amount_to_call player
-      elsif action.action == PokerAction::BET || action.action == PokerAction::RAISE
-        if action.modifier
-          action.modifier.to_i - player.chip_contributions.inject(:+)
-        else
-          @game_def.min_wagers[round] + amount_to_call(player)
-        end
-      else
-        0
-      end
-    )
-  end
-
-  # @return [Set] The set of legal actions for the currently acting player.
+  # @return [Array] The set of legal actions for the currently acting player.
   def legal_actions
-    Set.new(
-      if next_player_to_act.nil?
-        []
-      elsif player_sees_wager?
-        actions_without_wager = [
-          PokerAction::CALL,
-          PokerAction::FOLD
-        ]
+    return [] unless @match_state
 
-        if wager_legal?
-          actions_without_wager << PokerAction::RAISE
-        else
-          actions_without_wager
-        end
-      elsif chips_contributed_to_pot_this_round?
-        actions_without_wager = [PokerAction::CHECK]
-
-        if wager_legal?
-          actions_without_wager << PokerAction::RAISE
-        else
-          actions_without_wager
-        end
-      else
-        actions_without_wager = [PokerAction::CHECK]
-
-        if wager_legal?
-          actions_without_wager << PokerAction::BET
-        else
-          actions_without_wager
-        end
-      end
-    )
-  end
-
-  def wager_legal?(player = next_player_to_act)
-    !facing_all_in?(player)
-  end
-
-  def facing_all_in?(player = next_player_to_act)
-    chip_contributions_after_calling(player) >= @game_def.chip_stacks[position_relative_to_dealer(player)]
-  end
-
-  def chip_contributions_after_calling(player = next_player_to_act)
-    player.chip_contributions.inject(:+) + amount_to_call(player)
+    @match_state.players(@game_def)[users_position_relative_to_dealer].legal_actions
   end
 
   # @return [Boolean] +true+ if the current hand is the last in the match.
   def last_hand?
     # @todo make sure +@match_state.hand_number+ is not greater than @number_of_hands
-    return false unless @transition.next_state
+    return false unless @match_state
 
-    @transition.next_state.hand_number == @number_of_hands - 1
+    @match_state.hand_number == @number_of_hands - 1
   end
 
-  def big_blind
-    player_blind_relation.values.max
-  end
-  def big_blind_payer
-    player_blind_relation.key big_blind
-  end
-  def small_blind
-    player_blind_relation.values.sort[-2]
-  end
-  def small_blind_payer
-    player_blind_relation.key small_blind
+  # @return [String] player acting sequence as a string.
+  def player_acting_sequence_string
+    (player_acting_sequence.map { |per_round| per_round.join('') }).join('/')
   end
 
   # @return [Array<Array<Integer>>] The sequence of seats that acted,
   #  separated by round.
   def player_acting_sequence
-    return [[]] unless @transition.last_state
+    return [] unless @match_state
 
-    # @todo Translate each element from position relative to dealer to seat
-    @transition.last_state.player_acting_sequence(@game_def)
+    @match_state.player_acting_sequence(@game_def).map do |actions_per_round|
+      actions_per_round.map do |seat|
+        position_relative_to_dealer(seat)
+      end
+    end
+  end
+
+  def users_position_relative_to_dealer
+    @match_state.position_relative_to_dealer
   end
 
   private
 
-  def player_contributed_to_pot_this_round?(player=next_player_to_act)
-    player.chip_contributions.last > 0
-  end
+  def update_players!
+    return self if @match_state.first_state_of_first_round?
 
-  # @todo Change MST#next_state to current_state
-  def chips_contributed_to_pot_this_round?(round=@transition.next_state.round)
-    chip_contributions.inject(0) do |all_contributions, contributions|
-      all_contributions += contributions[round].to_r
-    end > 0
-  end
-
-  def player_sees_wager?(player=next_player_to_act)
-    return false unless player
-    amount_to_call(player) > 0
-  end
-
-  def users_position_relative_to_dealer() @transition.next_state.position_relative_to_dealer end
-
-  def start_new_hand!
-    set_min_wager!
-  end
-
-  def update_state_of_players!
-    action_with_context = PokerAction.new(
-      @transition.next_state.last_action.to_s,
-      cost: cost_of_action(
-        player_who_acted_last,
-        @transition.next_state.last_action
-      )
-    )
-
-    # @todo Move into MatchState and HandPlayer
-    unless action_with_context.to_s == 'f'
-      last_amount_called = amount_to_call(player_who_acted_last)
-      @min_wager = ChipStack.new(
-        [
-          @min_wager.to_r,
-          action_with_context.cost.to_r - last_amount_called
-        ].max
-      )
+    @players.each do |plyr|
+      plyr.hand_player = @match_state.players(@game_def)[position_relative_to_dealer(plyr)]
     end
 
-    set_min_wager! if @transition.new_round?
-
-    if hand_ended?
-      distribute_chips! @transition.next_state.board_cards
-    end
+    distribute_chips! if hand_ended?
 
     self
   end
@@ -419,14 +181,6 @@ class PlayersAtTheTable
     end
 
     self
-  end
-
-  def pot
-    @transition.last_state.pot
-  end
-
-  def set_min_wager!
-    @min_wager = @game_def.min_wagers[@transition.next_state.round]
   end
 end
 end
