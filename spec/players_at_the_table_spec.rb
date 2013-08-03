@@ -117,6 +117,8 @@ describe PlayersAtTheTable do
   end
   def check_next_to_act(patient=@patient)
     if @match.current_hand && @match.current_hand.next_action
+      ap state: @match.current_hand.current_match_state.to_s, action: @match.current_hand.next_action.to_s, first_player_position: patient.game_def.first_player_positions[1]
+
       patient.next_player_to_act.seat.must_equal @match.current_hand.next_action.seat
     else
       patient.next_player_to_act.must_be_nil
